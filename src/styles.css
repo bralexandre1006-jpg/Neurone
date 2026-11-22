@@ -16,13 +16,13 @@
 }
 
 :root {
-  --bg: #141415;
-  --sidebar: #0f0f10;
-  --panel: #19191b;
-  --card: #19191b;
-  --card-2: #1e1e20;
-  --raised: #232325;
-  --inset: #111112;
+  --bg: #0b0b0c;
+  --sidebar: #0f0f11;
+  --panel: #141416;
+  --card: #151517;
+  --card-2: #1a1a1d;
+  --raised: #1f1f22;
+  --inset: #0f0f11;
   --line: rgba(237, 237, 237, .07);
   --line-2: rgba(237, 237, 237, .11);
   --text: #ededed;
@@ -378,7 +378,7 @@ svg { display: block; }
   transition: border-color .15s var(--ease), background-color .15s var(--ease);
 }
 
-.domain-card:hover { border-color: rgba(237, 237, 237, .16); background: #1c1c1e; }
+.domain-card:hover { border-color: rgba(237, 237, 237, .16); background: #18181b; }
 .dc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .dc-icon {
   width: 36px; height: 36px;
