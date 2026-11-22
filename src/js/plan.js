@@ -151,7 +151,7 @@ export function weeks(d, p, maxWeeks = 10) {
         past: k < todayK,
         planned,
         plannedMin: planned.reduce((a, x) => a + x.planned, 0),
-        doneMin: log[k]?.[d.id] || 0
+        doneMin: Math.round(log[k]?.[d.id] || 0)
       });
     }
     out.push(row);

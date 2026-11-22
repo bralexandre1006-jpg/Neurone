@@ -892,3 +892,40 @@ html.tauri .main { background: var(--bg); }
 @media (max-width: 1080px) {
   .home-grid, .resume { grid-template-columns: 1fr; }
 }
+
+/* ---------- Minuteur ---------- */
+.topbar { gap: 12px; }
+.crumbs { flex: 1; }
+.timer {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 30px; padding: 0 8px 0 8px;
+  border-radius: 8px;
+  background: var(--raised);
+  border: 1px solid var(--line-2);
+  color: var(--text-2);
+  font: 600 12.5px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  transition: background-color .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease);
+}
+.timer:hover { background: #26262a; color: var(--text); }
+.timer.running { color: var(--text); border-color: rgba(232, 169, 78, .35); }
+.timer.reached { border-color: rgba(76, 195, 138, .4); }
+.t-ring { width: 18px; height: 18px; transform: rotate(-90deg); }
+.t-ring circle { fill: none; stroke-width: 2.4; }
+.t-track { stroke: rgba(255, 255, 255, .1); }
+.t-val { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .9s linear; }
+.timer.reached .t-val { stroke: var(--green); }
+.t-goal { color: var(--dim); font-weight: 400; }
+.t-ico { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; background: rgba(255, 255, 255, .06); }
+.t-ico .ico { width: 10px; height: 10px; fill: currentColor; stroke: none; }
+.timer.running .t-ico { background: rgba(232, 169, 78, .16); color: var(--accent); }
+
+/* ---------- Graisses : titres en gras ---------- */
+.h1 { font-weight: 700; letter-spacing: -.025em; }
+.h2, .section-title, .mod-title, .dc-name, .next-title, .gr-title, .plan-val, .stat-val, .rest-title { font-weight: 600; }
+.resume-title { font-weight: 700; }
+.brand-name { font-weight: 700; }
+.btn, .segmented button, .nav-item.active { font-weight: 600; }
+.prose h2 { font-weight: 700; }
+.prose h3, .q-title, .lesson-name, .who-name { font-weight: 600; }
+.ring b { font-weight: 700; }

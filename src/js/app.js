@@ -3,6 +3,7 @@ import * as S from './store.js';
 import { initWindow } from './window.js';
 import { audioSlot, audioSay, hydrateAudio, stopAudio } from './audio.js';
 import * as PL from './plan.js';
+import { initTimer, setContext, finish as finishTimer } from './timer.js';
 
 const { state } = S;
 const $ = (s, r = document) => r.querySelector(s);
@@ -10,7 +11,7 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const COLORS = ['#60a5fa', '#34d399', '#facc15', '#f472b6', '#a78bfa', '#fb923c', '#f87171', '#2dd4bf'];
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
-const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`);
+const fmtMin = (v) => { const m = Math.round(v); return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`; };
 const fmtDate = (k, opt = { day: 'numeric', month: 'long' }) => new Date(k + 'T12:00:00').toLocaleDateString('fr-FR', opt);
 const fmtDuration = (w) => (w % 4 === 0 && w >= 8 ? plural(w / 4, 'mois').replace('moiss', 'mois') : plural(w, 'semaine'));
 
@@ -70,6 +71,7 @@ function crumbs(items) {
 /* ---------------- Views ---------------- */
 function render() {
   PL.resetCache();
+  setContext(route);
   renderSidebar();
   const views = { home, domain, lesson, quiz, settings };
   const fn = views[route.name] || home;
@@ -205,7 +207,7 @@ function planCard(d) {
     const tip = c.planned.map((x) => `• ${x.title} (${x.planned} min)`).join('\n');
     return `<div class="cal-day ${cls}" title="${esc(fmtDate(c.k, { weekday: 'long', day: 'numeric', month: 'long' }) + (tip ? '\n' + tip : c.doneMin ? `\n${c.doneMin} min étudiées` : c.study ? '' : '\nRepos'))}">
       <span class="cal-n">${c.date.getDate()}</span>
-      ${min ? `<span class="cal-min">${min}′</span>` : ''}
+      ${Math.round(min) ? `<span class="cal-min">${Math.round(min)}′</span>` : ''}
       ${c.plannedMin || c.doneMin ? `<span class="cal-bar"><i style="width:${Math.min(100, Math.round(((c.past ? c.doneMin : c.plannedMin + (c.today ? c.doneMin : 0)) / sc.minutes) * 100))}%"></i></span>` : ''}
     </div>`;
   }).join('')}</div>`).join('');
@@ -633,7 +635,7 @@ function settings() {
         <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
       </button>
     </div>
-    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.2.0</div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.3.0</div>
   </div>`;
 }
 
@@ -905,7 +907,7 @@ const actions = {
     const d = S.getDomain(route.id), l = d.modules[route.mi].lessons[route.li];
     const was = S.isLessonDone(d, l);
     S.setLessonDone(d, l, !was);
-    if (!was) toast('Leçon terminée');
+    if (!was) { toast('Leçon terminée'); finishTimer(); }
     render();
   },
   'next-lesson': (el) => {
@@ -922,6 +924,7 @@ const actions = {
     qs.correct = c.q.questions.filter((x, i) => answerOk(x, qs.answers[i])).length;
     qs.pct = S.recordAttempt(qs.key, c.d.id, qs.correct, c.q.questions.length);
     qs.submitted = true;
+    finishTimer();
     render();
     $('#view').scrollTo({ top: 0, behavior: 'smooth' });
   },
@@ -977,39 +980,7 @@ document.addEventListener('keydown', (e) => {
   if (next) next.focus(); else $('[data-action="submit-quiz"]')?.click();
 });
 
-/* ---------------- Search ---------------- */
-const sInput = $('#searchInput'), sBox = $('#searchResults');
-let sIdx = 0, sItems = [];
-function runSearch() {
-  const q = sInput.value.trim().toLowerCase();
-  if (!q) { sBox.hidden = true; return; }
-  sItems = [];
-  state.domains.forEach((d) => {
-    if (d.name.toLowerCase().includes(q)) sItems.push({ label: d.name, sub: 'Domaine', color: d.color, go: { name: 'domain', id: d.id } });
-    d.modules.forEach((m, mi) => m.lessons.forEach((l, li) => {
-      if (l.title.toLowerCase().includes(q) || m.title.toLowerCase().includes(q)) sItems.push({ label: l.title, sub: `${d.name} · ${m.title}`, color: d.color, go: { name: 'lesson', id: d.id, mi, li } });
-    }));
-  });
-  sItems = sItems.slice(0, 8); sIdx = 0;
-  sBox.innerHTML = sItems.length ? sItems.map((it, i) => `<button class="sr-item ${i === sIdx ? 'active' : ''}" data-si="${i}"><span class="cdot" style="color:${it.color}"></span><span>${esc(it.label)}<small>${esc(it.sub)}</small></span></button>`).join('') : `<div class="sr-empty">Aucun résultat</div>`;
-  sBox.hidden = false;
-}
-function pickSearch(i) { const it = sItems[i]; if (!it) return; sInput.value = ''; sBox.hidden = true; sInput.blur(); go(it.go); }
-sInput.addEventListener('input', runSearch);
-sInput.addEventListener('focus', () => { if (state.settings.collapsed) toggleSidebar(); runSearch(); });
-sInput.addEventListener('blur', () => setTimeout(() => (sBox.hidden = true), 150));
-sInput.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-    e.preventDefault(); if (!sItems.length) return;
-    sIdx = (sIdx + (e.key === 'ArrowDown' ? 1 : -1) + sItems.length) % sItems.length;
-    sBox.querySelectorAll('.sr-item').forEach((b, i) => b.classList.toggle('active', i === sIdx));
-  } else if (e.key === 'Enter') pickSearch(sIdx);
-  else if (e.key === 'Escape') { sInput.value = ''; sBox.hidden = true; sInput.blur(); }
-});
-sBox.addEventListener('mousedown', (e) => { const b = e.target.closest('[data-si]'); if (b) { e.preventDefault(); pickSearch(+b.dataset.si); } });
-
 document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); sInput.focus(); sInput.select(); }
   if (e.key === 'Escape' && !$('#modalRoot').hidden) closeModal();
 });
 
@@ -1023,7 +994,6 @@ function toggleSidebar() {
 $('#brandMark').outerHTML = BRAND;
 $('#collapseBtn').innerHTML = icon('sidebar');
 $('#collapseBtn').onclick = toggleSidebar;
-$('.search-ico').innerHTML = icon('search');
 $('#addDomainSide').innerHTML = icon('plus');
 $('#profileBtn').dataset.action = 'profile';
 if (window.__TAURI__) document.documentElement.classList.add('tauri');
@@ -1054,4 +1024,5 @@ async function seed() {
 }
 
 initWindow();
+initTimer((d) => toast(`Objectif du jour atteint pour ${d.name} : ${d.schedule?.minutes || 25} min de travail`));
 loadCatalog().then(seed).finally(render);

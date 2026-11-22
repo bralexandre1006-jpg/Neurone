@@ -136,7 +136,6 @@ export function setLessonDone(d, l, done) {
   const k = lessonKey(d, l);
   if (done && !state.progress.lessons[k]) {
     state.progress.lessons[k] = Date.now();
-    logStudy(d.id, l.minutes || 10);
   } else if (!done) {
     delete state.progress.lessons[k];
   }
@@ -146,7 +145,6 @@ export function setLessonDone(d, l, done) {
 export function recordAttempt(key, domainId, correct, total) {
   const pct = Math.round((correct / total) * 100);
   (state.progress.attempts[key] ||= []).push({ pct, correct, total, date: Date.now() });
-  logStudy(domainId, Math.max(3, Math.round(total * 1.2)));
   save();
   return pct;
 }
