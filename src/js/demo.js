@@ -19,6 +19,7 @@ export const DEMO_DOMAINS = [
         lessons: [
           {
             id: 'm1l1', title: 'Le verbe « to be »', minutes: 12,
+            audio: [{ title: 'Exemple audio (son de test)', src: 'audio/demo-test.mp3' }],
             content: `<p>« To be » signifie <strong>être</strong>. C'est le verbe le plus utilisé de la langue anglaise.</p>
 <h2>Conjugaison au présent</h2>
 <table><tr><th>Sujet</th><th>Forme pleine</th><th>Contraction</th></tr>
@@ -27,6 +28,7 @@ export const DEMO_DOMAINS = [
 <tr><td>He / She / It</td><td>is</td><td>he's / she's / it's</td></tr>
 <tr><td>We / They</td><td>are</td><td>we're / they're</td></tr></table>
 <div class="note">À l'oral, on utilise presque toujours la contraction : <code>I'm tired</code> plutôt que <code>I am tired</code>.</div>
+<div class="audio" data-src="audio/demo-test.mp3" data-title="Prononciation : I'm, you're, he's"></div>
 <h2>Négation</h2>
 <p>On ajoute <strong>not</strong> après le verbe : <code>She is not (isn't) here.</code></p>`
           },

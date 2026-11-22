@@ -159,7 +159,8 @@ export function normalizeCurriculum(data) {
         id: `${m.id || 'm' + (i + 1)}-${l.id || 'l' + (j + 1)}`,
         title: String(l.title || `Leçon ${j + 1}`),
         minutes: Number(l.minutes) || 10,
-        content: String(l.content || '')
+        content: String(l.content || ''),
+        audio: Array.isArray(l.audio) ? l.audio.filter((x) => x && x.src).map((x) => ({ src: String(x.src), title: String(x.title || 'Audio') })) : []
       })),
       quiz: m.quiz ? normQuiz(m.quiz) : null
     };

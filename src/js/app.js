@@ -1,6 +1,7 @@
 import { icon, BRAND, DOMAIN_ICONS } from './icons.js';
 import * as S from './store.js';
 import { initWindow } from './window.js';
+import { audioSlot, hydrateAudio, stopAudio } from './audio.js';
 
 const { state } = S;
 const $ = (s, r = document) => r.querySelector(s);
@@ -17,6 +18,7 @@ let quizSession = null;
 /* ---------------- Navigation ---------------- */
 function go(r) {
   route = r;
+  stopAudio();
   if (r.name !== 'quiz') quizSession = null;
   render();
   $('#view').scrollTop = 0;
@@ -64,6 +66,7 @@ function render() {
   const html = fn();
   if (html === null) return;
   $('#view').innerHTML = `<div class="view-inner">${html}</div>`;
+  hydrateAudio($('#view'));
   requestAnimationFrame(() => document.querySelectorAll('[data-w]').forEach((el) => (el.style.width = el.dataset.w + '%')));
 }
 
@@ -152,7 +155,7 @@ function continueBlock(d, n) {
 
 function miniRing(pct) {
   const c = 2 * Math.PI * 15;
-  return `<svg width="40" height="40" viewBox="0 0 40 40" style="transform:rotate(-90deg)"><circle cx="20" cy="20" r="15" fill="none" stroke="#1f1f23" stroke-width="4"/><circle cx="20" cy="20" r="15" fill="none" stroke="#34d399" stroke-width="4" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}" style="filter:drop-shadow(0 0 4px #34d399)"/></svg>`;
+  return `<svg width="40" height="40" viewBox="0 0 40 40" style="transform:rotate(-90deg)"><circle cx="20" cy="20" r="15" fill="none" stroke="#1f1f23" stroke-width="4"/><circle cx="20" cy="20" r="15" fill="none" stroke="#34d399" stroke-width="4" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}"/></svg>`;
 }
 
 function minutesSince(days) {
@@ -203,7 +206,7 @@ function studyChart() {
     const d = path(s.vals);
     return `<defs><linearGradient id="g${i}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${s.color}"/><stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient></defs>
       <path class="area" d="${d} L${W},${H} L0,${H} Z" fill="url(#g${i})"/>
-      <path class="curve" d="${d}" stroke="${s.color}" style="filter:drop-shadow(0 0 6px ${s.color}88)"/>`;
+      <path class="curve" d="${d}" stroke="${s.color}"/>`;
   }).join('');
   const yl = [4, 3, 2, 1, 0].map((i) => `<span>${Math.round((top * i) / 4)}m</span>`).join('');
   const xl = weeks.map((w) => `<span>${String(w.getDate()).padStart(2, '0')}/${String(w.getMonth() + 1).padStart(2, '0')}</span>`).join('');
@@ -336,7 +339,8 @@ function lesson() {
   <article class="reader">
     <div class="eyebrow">Module ${route.mi + 1} · ${esc(m.title)}</div>
     <h1 class="h1" style="font-size:28px">${esc(l.title)}</h1>
-    <div class="hero-meta" style="margin-bottom:26px"><span class="pill">${icon('clock')}${l.minutes} min</span><span class="pill">Leçon ${route.li + 1}/${m.lessons.length}</span>${done ? `<span class="pill ok">${icon('check')}Terminée</span>` : ''}</div>
+    <div class="hero-meta" style="margin-bottom:26px"><span class="pill">${icon('clock')}${l.minutes} min</span><span class="pill">Leçon ${route.li + 1}/${m.lessons.length}</span>${l.audio?.length ? `<span class="pill">${icon('headphones')}${plural(l.audio.length, 'audio')}</span>` : ''}${done ? `<span class="pill ok">${icon('check')}Terminée</span>` : ''}</div>
+    ${l.audio?.length ? `<div class="audio-list">${l.audio.map(audioSlot).join('')}</div>` : ''}
     <div class="prose">${l.content || '<p class="dim">Contenu à venir.</p>'}</div>
     <div class="reader-foot">
       ${prev ? `<button class="btn btn-ghost" data-go='${JSON.stringify({ name: 'lesson', id: d.id, ...prev })}'>${icon('left')}Précédente</button>` : '<span></span>'}
@@ -488,7 +492,10 @@ function settings() {
       <pre class="mono" style="margin:0;font-size:11.5px;line-height:1.6;color:var(--text-2);background:#101012;border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto">{
   "modules": [{
     "title": "Les bases", "summary": "…", "week": 1,
-    "lessons": [{ "title": "…", "minutes": 12, "content": "&lt;p&gt;HTML&lt;/p&gt;" }],
+    "lessons": [{
+      "title": "…", "minutes": 12, "content": "&lt;p&gt;HTML&lt;/p&gt;",
+      "audio": [{ "title": "Dialogue", "src": "audio/anglais/m1-l1.mp3" }]
+    }],
     "quiz": { "passScore": 70, "questions": [
       { "q": "…", "choices": ["a","b","c"], "answer": 1, "explain": "…" }
     ]}
