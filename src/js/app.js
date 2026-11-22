@@ -602,7 +602,7 @@ function settings() {
     <div class="card"><div class="h2">Zone sensible</div>
       <div class="muted" style="margin:6px 0 14px">Efface toute la progression et les domaines, puis réinstalle le cours d'anglais.</div>
       <button class="btn btn-danger" data-action="reset">${icon('trash')}Tout réinitialiser</button></div>
-    <div class="dim mono" style="font-size:11px;padding:4px 2px">Neurone v0.1.0</div>
+    <div class="dim mono" style="font-size:11px;padding:4px 2px">Neurone v0.1.1</div>
   </div>`;
 }
 
