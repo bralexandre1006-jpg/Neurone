@@ -1,7 +1,7 @@
 import { icon, BRAND, DOMAIN_ICONS } from './icons.js';
 import * as S from './store.js';
 import { initWindow } from './window.js';
-import { audioSlot, hydrateAudio, stopAudio } from './audio.js';
+import { audioSlot, audioSay, hydrateAudio, stopAudio } from './audio.js';
 
 const { state } = S;
 const $ = (s, r = document) => r.querySelector(s);
@@ -13,6 +13,7 @@ const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padSt
 const fmtDuration = (w) => (w % 4 === 0 && w >= 8 ? plural(w / 4, 'mois').replace('moiss', 'mois') : plural(w, 'semaine'));
 
 let route = { name: 'overview' };
+let catalog = [];
 let quizSession = null;
 
 /* ---------------- Navigation ---------------- */
@@ -242,6 +243,12 @@ function domainCard(d) {
   </div>`;
 }
 
+function exBadge(d, l) {
+  if (!l.exercise) return '';
+  const b = S.bestScore(S.exerciseKey(d, l));
+  return b === null ? '' : `<span class="pill ${b >= S.passScore(l.exercise) ? 'ok' : 'ko'}">${b}%</span>`;
+}
+
 function ring(pct, color) {
   const c = 2 * Math.PI * 40;
   return `<div class="ring" style="color:${color}"><svg viewBox="0 0 92 92"><circle class="track" cx="46" cy="46" r="40"/><circle class="val" cx="46" cy="46" r="40" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}"/></svg><b>${pct}%</b></div>`;
@@ -264,6 +271,7 @@ function domain() {
         <span class="pill">${s.lessonsDone}/${s.lessons} leçons</span>
         <span class="pill">${fmtMin(s.minutes)} de contenu</span>
       </div>
+      ${d.source ? `<div class="source">Source : ${esc(d.source.name)}${d.source.note ? ` · ${esc(d.source.note)}` : ''}</div>` : ''}
     </div>
     <div class="flex" style="gap:16px">
       ${ring(s.pct, d.color)}
@@ -302,7 +310,7 @@ function domain() {
           const done = S.isLessonDone(d, l);
           return `<button class="lesson" ${ms.unlocked ? '' : 'disabled'} data-go='${JSON.stringify({ name: 'lesson', id: d.id, mi: i, li: j })}'>
             <span class="check ${done ? 'on' : ''}">${done ? icon('check') : ''}</span>
-            <span class="t">${esc(l.title)}</span><span class="m">${l.minutes} min</span></button>`;
+            <span class="t">${esc(l.title)}</span>${exBadge(d, l)}<span class="m">${l.minutes} min</span></button>`;
         }).join('')}
         ${m.quiz ? `<button class="lesson quiz" ${ms.quizUnlocked ? '' : 'disabled'} data-go='${JSON.stringify({ name: 'quiz', id: d.id, mi: i })}'>
           <span class="check ${ms.quizPassed ? 'on' : ''}">${ms.quizPassed ? icon('check') : ''}</span>
@@ -342,6 +350,7 @@ function lesson() {
     <div class="hero-meta" style="margin-bottom:26px"><span class="pill">${icon('clock')}${l.minutes} min</span><span class="pill">Leçon ${route.li + 1}/${m.lessons.length}</span>${l.audio?.length ? `<span class="pill">${icon('headphones')}${plural(l.audio.length, 'audio')}</span>` : ''}${done ? `<span class="pill ok">${icon('check')}Terminée</span>` : ''}</div>
     ${l.audio?.length ? `<div class="audio-list">${l.audio.map(audioSlot).join('')}</div>` : ''}
     <div class="prose">${l.content || '<p class="dim">Contenu à venir.</p>'}</div>
+    ${l.exercise ? exerciseCard(d, l) : ''}
     <div class="reader-foot">
       ${prev ? `<button class="btn btn-ghost" data-go='${JSON.stringify({ name: 'lesson', id: d.id, ...prev })}'>${icon('left')}Précédente</button>` : '<span></span>'}
       <div class="flex">
@@ -352,53 +361,96 @@ function lesson() {
   </article>`;
 }
 
-function quiz() {
+function exerciseCard(d, l) {
+  const k = S.exerciseKey(d, l), best = S.bestScore(k), ok = best !== null && best >= S.passScore(l.exercise);
+  return `<div class="card exercise-card">
+    <div class="flex" style="gap:14px;min-width:0">
+      <span class="mod-num ${ok ? 'done' : ''}">${icon(ok ? 'check' : 'exam')}</span>
+      <div style="min-width:0"><div class="mod-title">Exercice d'application</div>
+      <div class="mod-sub">${plural(l.exercise.questions.length, 'question')}${best !== null ? ` · meilleur score ${best} %` : ''}</div></div>
+    </div>
+    <button class="btn ${ok ? '' : 'btn-primary'}" data-go='${JSON.stringify({ name: 'quiz', id: d.id, mi: route.mi, li: route.li })}'>${best !== null ? 'Refaire' : "Faire l'exercice"}${icon('right')}</button>
+  </div>`;
+}
+
+function quizCtx() {
   const d = S.getDomain(route.id);
-  if (!d) return (go({ name: 'domains' }), null);
-  const isExam = route.mi === 'exam';
-  const m = isExam ? null : d.modules[route.mi];
-  const q = isExam ? d.exam : m?.quiz;
-  if (!q) return (go({ name: 'domain', id: d.id }), null);
-  const key = isExam ? S.examKey(d) : S.quizKey(d, m);
-  const title = isExam ? 'Examen final' : `Test : ${m.title}`;
-  crumbs([{ label: 'Domaines', go: { name: 'domains' } }, { label: d.name, go: { name: 'domain', id: d.id } }, { label: title }]);
+  if (!d) return null;
+  if (route.mi === 'exam') return d.exam ? { d, q: d.exam, key: S.examKey(d), title: 'Examen final', kind: 'exam' } : null;
+  const m = d.modules[route.mi];
+  if (!m) return null;
+  if (route.li !== undefined) {
+    const l = m.lessons[route.li];
+    return l?.exercise ? { d, m, l, q: l.exercise, key: S.exerciseKey(d, l), title: `Exercice : ${l.title}`, kind: 'exercise' } : null;
+  }
+  return m.quiz ? { d, m, q: m.quiz, key: S.quizKey(d, m), title: m.quiz.title ? `${m.quiz.title} : ${m.title}` : `Test : ${m.title}`, kind: 'quiz' } : null;
+}
+
+function answerOk(x, a) {
+  if (a === null || a === undefined) return false;
+  if (x.type === 'text') return S.matchText(a, x.accept);
+  return a === x.answer;
+}
+
+function quiz() {
+  const c = quizCtx();
+  if (!c) return (go(S.getDomain(route.id) ? { name: 'domain', id: route.id } : { name: 'domains' }), null);
+  const { d, q, key, title, kind } = c;
+  const back = kind === 'exercise' ? { name: 'lesson', id: d.id, mi: route.mi, li: route.li } : { name: 'domain', id: d.id };
+  crumbs([{ label: 'Domaines', go: { name: 'domains' } }, { label: d.name, go: { name: 'domain', id: d.id } }, ...(kind === 'exercise' ? [{ label: c.l.title, go: back }] : []), { label: kind === 'exercise' ? 'Exercice' : title }]);
   if (!quizSession || quizSession.key !== key) quizSession = { key, answers: Array(q.questions.length).fill(null), submitted: false, pct: 0 };
   const qs = quizSession;
   const pass = S.passScore(q);
+  const okMsg = { exam: 'Domaine validé. Gloire au travailleur studieux, Camarade !', quiz: 'Module validé, le suivant est débloqué.', exercise: 'Bien joué, la leçon est acquise.' }[kind];
 
   const result = qs.submitted ? `
     <div class="card result">
       <span class="pill ${qs.pct >= pass ? 'ok' : 'ko'}">${qs.pct >= pass ? 'Réussi' : 'Pas encore'}</span>
       <div class="score" style="color:${qs.pct >= pass ? 'var(--green)' : 'var(--red)'}">${qs.pct}%</div>
       <div class="muted">${qs.correct}/${q.questions.length} bonnes réponses · seuil ${pass} %</div>
-      <div class="muted" style="margin-top:6px">${qs.pct >= pass ? (isExam ? 'Domaine validé. Gloire au travailleur studieux, Camarade !' : 'Module validé, le suivant est débloqué.') : 'Relis les corrections ci-dessous puis retente ta chance.'}</div>
+      <div class="muted" style="margin-top:6px">${qs.pct >= pass ? okMsg : 'Relis les corrections ci-dessous puis retente ta chance.'}</div>
       <div class="flex" style="justify-content:center;margin-top:18px">
         <button class="btn" data-action="retry-quiz">${icon('refresh')}Recommencer</button>
-        <button class="btn btn-primary" data-go='${JSON.stringify({ name: 'domain', id: d.id })}'>Retour au domaine</button>
+        <button class="btn btn-primary" data-go='${JSON.stringify(back)}'>${kind === 'exercise' ? 'Retour à la leçon' : 'Retour au domaine'}</button>
       </div>
     </div>` : '';
 
-  const items = q.questions.map((x, i) => `
-    <div class="card q">
-      <div class="q-title"><span class="n">${String(i + 1).padStart(2, '0')}</span><span>${esc(x.q)}</span></div>
-      <div class="choices ${qs.submitted ? 'locked' : ''}">
-        ${x.choices.map((c, j) => {
+  let lastSection = null;
+  const items = q.questions.map((x, i) => {
+    const sec = x.section && x.section !== lastSection ? `<div class="q-section">${esc(x.section)}</div>` : '';
+    if (x.section) lastSection = x.section;
+    const say = x.audio ? audioSay(x.audio) : '';
+    const prompt = esc(x.q).replace(/_{3,}/g, '<span class="blank"></span>');
+    let body;
+    if (x.type === 'text') {
+      const ok = qs.submitted && answerOk(x, qs.answers[i]);
+      body = `<input class="answer ${qs.submitted ? (ok ? 'right' : 'wrong') : ''}" data-text="${i}" value="${esc(qs.answers[i] ?? '')}" placeholder="Ta réponse…" autocomplete="off" spellcheck="false" ${qs.submitted ? 'disabled' : ''}>
+        ${qs.submitted && !ok ? `<div class="explain">${icon('check', 'ok-ico')} ${x.accept.map(esc).join(' <span class="dim">ou</span> ')}</div>` : ''}`;
+    } else {
+      body = `<div class="choices ${qs.submitted ? 'locked' : ''}">
+        ${x.choices.map((ch, j) => {
           let cls = qs.answers[i] === j ? 'sel' : '';
           if (qs.submitted) cls = j === x.answer ? 'right' : qs.answers[i] === j ? 'wrong' : '';
-          return `<button class="choice ${cls}" data-choice="${i}:${j}"><span class="radio"></span>${esc(c)}</button>`;
+          return `<button class="choice ${cls}" data-choice="${i}:${j}"><span class="radio"></span>${esc(ch)}</button>`;
         }).join('')}
-      </div>
+      </div>`;
+    }
+    return `${sec}<div class="card q">
+      <div class="q-title"><span class="n">${String(i + 1).padStart(2, '0')}</span><span class="q-text">${prompt}</span>${say}</div>
+      ${body}
       ${qs.submitted && x.explain ? `<div class="explain">${icon('info', 'dim')} ${esc(x.explain)}</div>` : ''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
-  const answered = qs.answers.filter((a) => a !== null).length;
+  const answered = qs.answers.filter((a) => a !== null && a !== '').length;
+  const intro = q.intro ? `<div class="note-card prose">${q.intro}</div>` : '';
   return `
   <div class="reader">
     <div class="eyebrow"><span style="color:${d.color}">●</span> ${esc(d.name)}</div>
     <h1 class="h1" style="font-size:28px">${esc(title)}</h1>
     <div class="sub" style="margin-bottom:22px">${q.questions.length} questions · réussite à ${pass} %${S.bestScore(key) !== null ? ` · meilleur score ${S.bestScore(key)} %` : ''}</div>
-    ${result}${items}
-    ${qs.submitted ? '' : `<div class="quiz-bar"><span class="muted mono" style="font-size:12px">${answered}/${q.questions.length} répondues</span>
+    ${result}${intro}${items}
+    ${qs.submitted ? '' : `<div class="quiz-bar"><span class="muted mono" style="font-size:12px" id="answeredCount">${answered}/${q.questions.length} répondues</span>
       <button class="btn btn-primary" data-action="submit-quiz" ${answered === q.questions.length ? '' : 'disabled'}>Valider mes réponses</button></div>`}
   </div>`;
 }
@@ -494,16 +546,18 @@ function settings() {
     "title": "Les bases", "summary": "…", "week": 1,
     "lessons": [{
       "title": "…", "minutes": 12, "content": "&lt;p&gt;HTML&lt;/p&gt;",
-      "audio": [{ "title": "Dialogue", "src": "audio/anglais/m1-l1.mp3" }]
+      "audio": [{ "title": "Dialogue", "src": "audio/anglais/m1-l1.mp3" }],
+      "exercise": { "intro": "&lt;p&gt;Consigne&lt;/p&gt;", "questions": [ … ] }
     }],
     "quiz": { "passScore": 70, "questions": [
-      { "q": "…", "choices": ["a","b","c"], "answer": 1, "explain": "…" }
+      { "q": "…", "choices": ["a","b","c"], "answer": 1, "explain": "…" },
+      { "type": "text", "q": "She ____ (be) happy.", "accept": ["is", "'s"] }
     ]}
   }],
   "exam": { "passScore": 75, "questions": [ … ] }
 }</pre></div>
     <div class="card"><div class="h2">Zone sensible</div>
-      <div class="muted" style="margin:6px 0 14px">Réinitialise toute la progression et restaure les domaines de démonstration.</div>
+      <div class="muted" style="margin:6px 0 14px">Efface toute la progression et les domaines, puis réinstalle le cours d'anglais.</div>
       <button class="btn btn-danger" data-action="reset">${icon('trash')}Tout réinitialiser</button></div>
     <div class="dim mono" style="font-size:11px;padding:4px 2px">Neurone v0.1.0</div>
   </div>`;
@@ -541,6 +595,12 @@ function newDomainModal() {
   openModal(`
     <div class="modal-head"><div class="h2">Nouveau domaine</div><div class="muted" style="margin-top:4px">Définis ce que tu veux apprendre ; le cursus sera construit ensuite.</div></div>
     <div class="modal-body">
+      ${catalog.length ? `<div class="field"><label>Depuis la bibliothèque</label><div class="lib">${catalog.map((c) => {
+        const has = state.domains.some((d) => d.courseId === c.id);
+        return `<div class="lib-item"><div class="dc-icon" style="color:${c.color}">${icon(c.icon)}</div>
+          <div style="flex:1;min-width:0"><div class="row-title">${esc(c.name)} <span class="dim">· ${esc(c.level)}</span></div><div class="row-sub">${plural(c.modules, 'module')} · ${c.lessons} leçons</div></div>
+          <button class="btn btn-sm" data-lib="${c.id}" ${has ? 'disabled' : ''}>${has ? 'Déjà ajouté' : 'Ajouter'}</button></div>`;
+      }).join('')}</div></div><div class="or"><span>ou crée un domaine personnalisé</span></div>` : ''}
       <div class="field"><label>Nom du domaine</label><input id="fName" maxlength="40" placeholder="Ex. Anglais, Philosophie, Python…"><div class="err" id="fErr" hidden>Donne un nom à ce domaine.</div></div>
       <div class="field"><label>Objectif</label><textarea id="fGoal" maxlength="200" placeholder="Ex. Atteindre un niveau B2 et suivre une série sans sous-titres."></textarea></div>
       <div class="row2">
@@ -559,10 +619,10 @@ function newDomainModal() {
       f[k] = b.dataset.v;
     });
     pick('#fUnit', 'unit'); pick('#fLevel', 'level'); pick('#fColor', 'color'); pick('#fIcon', 'icon');
-    $('#fName', m).focus();
+    if (!catalog.length) $('#fName', m).focus();
     const create = () => {
       const name = $('#fName', m).value.trim();
-      if (!name) { $('#fErr', m).hidden = false; $('#fName', m).focus(); return; }
+      if (!name) { $('#fErr', m).hidden = false; if (!catalog.length) $('#fName', m).focus(); return; }
       const n = Math.max(1, Math.min(52, parseInt($('#fDur', m).value, 10) || 1));
       const d = {
         id: S.uid(), name, goal: $('#fGoal', m).value.trim(), description: '', color: f.color, icon: f.icon, level: f.level,
@@ -573,6 +633,13 @@ function newDomainModal() {
       go({ name: 'domain', id: d.id });
     };
     $('#fCreate', m).onclick = create;
+    m.querySelectorAll('[data-lib]').forEach((b) => (b.onclick = async () => {
+      b.disabled = true; b.textContent = 'Ajout…';
+      try {
+        const d = await addCourse(catalog.find((c) => c.id === b.dataset.lib));
+        closeModal(); toast(`« ${d.name} » ajouté`); go({ name: 'domain', id: d.id });
+      } catch (e) { toast('Impossible de charger ce cours', false); b.disabled = false; b.textContent = 'Ajouter'; }
+    }));
     $('#fName', m).addEventListener('keydown', (e) => e.key === 'Enter' && create());
   });
 }
@@ -621,11 +688,11 @@ const actions = {
     go({ name: 'lesson', id: d.id, ...n });
   },
   'submit-quiz': () => {
-    const d = S.getDomain(route.id);
-    const q = route.mi === 'exam' ? d.exam : d.modules[route.mi].quiz;
+    const c = quizCtx();
+    if (!c) return;
     const qs = quizSession;
-    qs.correct = q.questions.filter((x, i) => qs.answers[i] === x.answer).length;
-    qs.pct = S.recordAttempt(qs.key, d.id, qs.correct, q.questions.length);
+    qs.correct = c.q.questions.filter((x, i) => answerOk(x, qs.answers[i])).length;
+    qs.pct = S.recordAttempt(qs.key, c.d.id, qs.correct, c.q.questions.length);
     qs.submitted = true;
     render();
     $('#view').scrollTo({ top: 0, behavior: 'smooth' });
@@ -636,7 +703,7 @@ const actions = {
     try { S.importAll(text); toast('Sauvegarde restaurée'); go({ name: 'overview' }); } catch (e) { toast(e.message, false); }
   })),
   reset: () => confirmModal('Tout réinitialiser ?', 'Toute ta progression et tes domaines seront effacés. Exporte une sauvegarde avant si besoin.', 'Réinitialiser', () => {
-    S.resetAll(); toast('Application réinitialisée'); go({ name: 'overview' });
+    S.resetAll(); seed().finally(() => { toast('Application réinitialisée'); go({ name: 'overview' }); });
   })
 };
 
@@ -660,6 +727,25 @@ document.addEventListener('click', (e) => {
   if (n) return go({ name: n.dataset.nav });
   const dm = t.closest('[data-domain]');
   if (dm) return go({ name: 'domain', id: dm.dataset.domain });
+});
+
+document.addEventListener('input', (e) => {
+  const t = e.target.closest('[data-text]');
+  if (!t || !quizSession || quizSession.submitted) return;
+  quizSession.answers[+t.dataset.text] = t.value.trim() === '' ? null : t.value;
+  const n = quizSession.answers.filter((a) => a !== null && a !== '').length;
+  const cnt = $('#answeredCount');
+  if (cnt) cnt.textContent = `${n}/${quizSession.answers.length} répondues`;
+  const btn = $('[data-action="submit-quiz"]');
+  if (btn) btn.disabled = n !== quizSession.answers.length;
+});
+document.addEventListener('keydown', (e) => {
+  const t = e.target.closest?.('[data-text]');
+  if (!t || e.key !== 'Enter') return;
+  e.preventDefault();
+  const all = [...document.querySelectorAll('[data-text]')];
+  const next = all[all.indexOf(t) + 1];
+  if (next) next.focus(); else $('[data-action="submit-quiz"]')?.click();
 });
 
 /* ---------------- Search ---------------- */
@@ -713,5 +799,25 @@ $('#addDomainSide').innerHTML = icon('plus');
 $('#addDomainSide').dataset.action = 'new-domain';
 $('#app').classList.toggle('collapsed', !!state.settings.collapsed);
 
+async function loadCatalog() {
+  try { catalog = await (await fetch('courses/index.json')).json(); } catch { catalog = []; }
+}
+
+async function addCourse(entry) {
+  const course = await (await fetch(entry.file)).json();
+  const d = S.domainFromCourse(course);
+  state.domains.push(d);
+  S.save();
+  return d;
+}
+
+async function seed() {
+  if (state.seeded !== false) return;
+  const first = catalog.find((c) => c.id === 'anglais-debutant');
+  try { if (first) await addCourse(first); } catch (e) { console.error(e); }
+  state.seeded = true;
+  S.save();
+}
+
 initWindow();
-render();
+loadCatalog().then(seed).finally(render);

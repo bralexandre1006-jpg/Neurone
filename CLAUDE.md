@@ -14,6 +14,9 @@ Pour chaque demande : analyser, puis recommander un modèle avant de toucher à 
 - Convention de version : semver, synchronisée dans `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
 - Données : localStorage clé `neurone.v1` (domaines + progression) ; export/import JSON dans Paramètres
 - Cursus : générés par Claude en session (option A) au format JSON, importés par domaine (format décrit dans Paramètres)
+- Bibliothèque intégrée : `src/courses/index.json` + `src/courses/*.json` ; au 1er lancement, « Anglais débutant » est installé automatiquement
+- Anglais débutant : repris d'anglaisfacile.com (autorisation obtenue par le propriétaire du projet), scripts de conversion dans `tools/anglaisfacile/`
+- Questions : QCM (`choices`/`answer`) ou réponse écrite (`type: "text"`, `accept: [...]`), exercice optionnel par leçon (`exercise`)
 - Audio des leçons : champ `audio: [{title, src}]` par leçon ou `<div class="audio" data-src data-title>` dans le contenu ; fichiers dans `src/audio/<domaine>/`
 - Police : Inter variable embarquée (`src/fonts/`), aucun effet néon/halo
 - DA : sombre, coins arrondis, pastilles fenêtre à droite (orange réduire, vert agrandir, rouge fermer)

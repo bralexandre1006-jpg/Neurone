@@ -9,11 +9,33 @@ export function audioSlot(a) {
   return `<div class="audio" data-src="${esc(a.src)}" data-title="${esc(a.title || 'Audio')}"></div>`;
 }
 
+export function audioSay(src, title = 'Écouter') {
+  return `<button class="say" data-src="${esc(src)}" title="${esc(title)}"></button>`;
+}
+
 export function stopAudio() {
   if (current) { current.pause(); current = null; }
 }
 
 export function hydrateAudio(root) {
+  root.querySelectorAll('.say[data-src]').forEach((b) => {
+    b.innerHTML = icon('volume');
+    let a = null;
+    b.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!a) {
+        a = new Audio(b.dataset.src);
+        a.addEventListener('playing', () => b.classList.add('playing'));
+        a.addEventListener('pause', () => b.classList.remove('playing'));
+        a.addEventListener('ended', () => b.classList.remove('playing'));
+        a.addEventListener('error', () => { b.classList.add('err'); b.title = 'Audio introuvable'; });
+      }
+      if (current && current !== a) current.pause();
+      current = a;
+      a.currentTime = 0;
+      a.play().catch(() => b.classList.add('err'));
+    });
+  });
   root.querySelectorAll('.audio[data-src]').forEach((slot) => {
     const el = document.createElement('div');
     el.className = 'player';

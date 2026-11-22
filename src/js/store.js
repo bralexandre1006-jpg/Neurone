@@ -1,4 +1,3 @@
-import { DEMO_DOMAINS } from './demo.js';
 
 const KEY = 'neurone.v1';
 export const PASS_DEFAULT = 70;
@@ -6,7 +5,8 @@ export const PASS_DEFAULT = 70;
 function blank() {
   return {
     version: 1,
-    domains: structuredClone(DEMO_DOMAINS),
+    domains: [],
+    seeded: false,
     progress: { lessons: {}, attempts: {}, log: {} },
     settings: { collapsed: false }
   };
@@ -51,6 +51,18 @@ export const today = (d = new Date()) => {
 export const lessonKey = (d, l) => `${d.id}/${l.id}`;
 export const quizKey = (d, m) => `${d.id}/${m.id}/quiz`;
 export const examKey = (d) => `${d.id}/exam`;
+export const exerciseKey = (d, l) => `${d.id}/${l.id}/ex`;
+
+const norm = (t) => String(t ?? '')
+  .toLowerCase()
+  .normalize('NFC')
+  .replace(/[’‘`´]/g, "'")
+  .replace(/[“”]/g, '"')
+  .replace(/\s+/g, ' ')
+  .replace(/\s+([.,!?;:])/g, '$1')
+  .replace(/[.!?;,]+$/g, '')
+  .trim();
+export const matchText = (answer, accept) => accept.some((a) => norm(a) === norm(answer));
 
 export const getDomain = (id) => state.domains.find((d) => d.id === id);
 
@@ -160,6 +172,7 @@ export function normalizeCurriculum(data) {
         title: String(l.title || `Leçon ${j + 1}`),
         minutes: Number(l.minutes) || 10,
         content: String(l.content || ''),
+        exercise: l.exercise ? normQuiz(l.exercise) : null,
         audio: Array.isArray(l.audio) ? l.audio.filter((x) => x && x.src).map((x) => ({ src: String(x.src), title: String(x.title || 'Audio') })) : []
       })),
       quiz: m.quiz ? normQuiz(m.quiz) : null
@@ -172,13 +185,33 @@ function normQuiz(q) {
   if (!Array.isArray(q.questions) || !q.questions.length) throw new Error('Un quiz ne contient aucune question.');
   return {
     title: q.title || '',
+    intro: q.intro ? String(q.intro) : '',
     passScore: Number(q.passScore) || PASS_DEFAULT,
-    questions: q.questions.map((x) => ({
-      q: String(x.q),
-      choices: x.choices.map(String),
-      answer: Number(x.answer),
-      explain: x.explain ? String(x.explain) : ''
-    }))
+    questions: q.questions.map((x) => {
+      const o = { q: String(x.q ?? '') };
+      if (x.section) o.section = String(x.section);
+      if (x.audio) o.audio = String(x.audio);
+      if (x.explain) o.explain = String(x.explain);
+      if (x.type === 'text') {
+        o.type = 'text';
+        o.accept = (Array.isArray(x.accept) ? x.accept : [x.accept]).map(String).filter(Boolean);
+        if (!o.accept.length) throw new Error('Question sans réponse attendue : ' + o.q);
+      } else {
+        o.choices = x.choices.map(String);
+        o.answer = Number(x.answer);
+      }
+      return o;
+    })
+  };
+}
+
+export function domainFromCourse(c) {
+  const cur = normalizeCurriculum(c);
+  return {
+    id: uid(), courseId: c.id, name: c.name, description: c.description || '', goal: c.goal || '',
+    color: c.color || '#60a5fa', icon: c.icon || 'book', level: c.level || 'Débutant',
+    durationWeeks: Number(c.durationWeeks) || 12, source: c.source || null, createdAt: Date.now(),
+    modules: cur.modules, exam: cur.exam
   };
 }
 
@@ -199,5 +232,6 @@ export function resetAll() {
   const b = blank();
   state.domains = b.domains;
   state.progress = b.progress;
+  state.seeded = false;
   save();
 }

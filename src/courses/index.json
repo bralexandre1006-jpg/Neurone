@@ -1,0 +1,13 @@
+[
+ {
+  "id": "anglais-debutant",
+  "file": "courses/anglais-debutant.json",
+  "name": "Anglais",
+  "level": "Débutant",
+  "icon": "globe",
+  "color": "#60a5fa",
+  "description": "Le cours pour débutants d'anglaisfacile.com : 35 leçons en 7 modules, avec exercices, bilans et examen final.",
+  "lessons": 37,
+  "modules": 7
+ }
+]
