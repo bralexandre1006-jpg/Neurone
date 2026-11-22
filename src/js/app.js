@@ -93,19 +93,17 @@ function overview() {
   const weekMin = minutesSince(7);
   const st = S.streak();
 
-  const ringArt = `<div class="stat-art">${miniRing(global)}</div>`;
   return `
   <div class="page-head">
     <div>
-      <div class="eyebrow">Bon retour, Camarade</div>
       <h1 class="h1">${MONTHS[now.getMonth()]} <span class="soft">${now.getFullYear()}</span></h1>
     </div>
     <button class="btn btn-primary" data-action="new-domain">${icon('plus')}Nouveau domaine</button>
   </div>
 
   <div class="grid stats">
-    ${statCard('Progression globale', 'target', `${global}<small>%</small>`, `${plural(all.length, 'domaine')} en cours`, ringArt)}
-    ${statCard('Série en cours', 'flame', `${st}<small>${st > 1 ? 'jours' : 'jour'}</small>`, st ? '<span class="up">Le plan quinquennal avance</span>' : '<span class="warn">Étudie aujourd\'hui pour lancer la série</span>')}
+    ${statCard('Progression globale', 'target', `${global}<small>%</small>`, `${plural(all.length, 'domaine')} en cours`)}
+    ${statCard('Série en cours', 'flame', `${st}<small>${st > 1 ? 'jours' : 'jour'}</small>`, st ? 'Le plan quinquennal avance' : 'Étudie aujourd\'hui pour lancer la série')}
     ${statCard('Leçons terminées', 'book', `${lessonsDone}<small>/${lessonsTotal}</small>`, `${fmtMin(weekMin)} cette semaine`)}
     ${statCard('Examens réussis', 'trophy', `${passed}<small>/${ex.length}</small>`, `${ex.filter((e) => e.available && !e.passed).length} à passer`)}
   </div>
@@ -157,7 +155,7 @@ function todayCard() {
   }
   const first = rows.find((r) => !r.done);
   return `${head}
-    ${bar(plannedMin ? Math.round((doneMin / plannedMin) * 100) : 0, 'var(--green)')}
+    ${bar(plannedMin ? Math.round((doneMin / plannedMin) * 100) : 0, 'var(--accent)')}
     <div class="today-list">${rows.map((r) => `
       <button class="today-item ${r.done ? 'done' : ''}" data-go='${JSON.stringify(r.it.go)}'>
         <span class="check ${r.done ? 'on' : ''}">${r.done ? icon('check') : ''}</span>
@@ -165,7 +163,7 @@ function todayCard() {
         <span class="t">${esc(r.it.title)}${r.it.cont && !r.done ? ' <span class="dim">(partie)</span>' : ''}</span>
         <span class="m">${r.min} min</span>
       </button>`).join('')}</div>
-    ${first ? `<button class="btn btn-primary" style="margin-top:14px" data-go='${JSON.stringify(first.it.go)}'>Commencer la séance${icon('right')}</button>` : `<div class="up" style="margin-top:12px;font-size:12.5px">Séance du jour accomplie. Le plan avance, Camarade !</div>`}`;
+    ${first ? `<button class="btn btn-primary" style="margin-top:14px" data-go='${JSON.stringify(first.it.go)}'>Commencer la séance${icon('right')}</button>` : `<div class="up" style="margin-top:12px;font-size:12.5px">Séance du jour accomplie. Le plan avance, Camarade</div>`}`;
 }
 
 function planCard(d) {
@@ -202,11 +200,6 @@ function planCard(d) {
     </div>
     ${wk.more ? `<div class="dim" style="font-size:11.5px;margin-top:8px">… et la suite jusqu'au ${fmtDate(p.end)}.</div>` : ''}
   </div>`;
-}
-
-function miniRing(pct) {
-  const c = 2 * Math.PI * 15;
-  return `<svg width="40" height="40" viewBox="0 0 40 40" style="transform:rotate(-90deg)"><circle cx="20" cy="20" r="15" fill="none" stroke="#1f1f23" stroke-width="4"/><circle cx="20" cy="20" r="15" fill="none" stroke="#34d399" stroke-width="4" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}"/></svg>`;
 }
 
 function minutesSince(days) {
@@ -269,7 +262,7 @@ function domains() {
   return `
   <div class="page-head">
     <div><div class="eyebrow">Bibliothèque</div><h1 class="h1">Domaines <span class="soft">${state.domains.length}</span></h1>
-    <div class="sub">Chaque domaine est un cursus complet : modules, leçons, tests et examen final.</div></div>
+    <div class="sub">Chaque domaine est un cursus complet : modules, leçons, tests et examen final</div></div>
     <button class="btn btn-primary" data-action="new-domain">${icon('plus')}Nouveau domaine</button>
   </div>
   <div class="grid domains">
@@ -347,11 +340,11 @@ function domain() {
     const open = route.open ? route.open === i : i === (firstOpen < 0 ? 0 : firstOpen);
     const qBest = m.quiz ? S.bestScore(S.quizKey(d, m)) : null;
     return `
-    <div class="card module ${ms.unlocked ? '' : 'locked'} ${open ? 'open' : ''}">
+    <div class="card module ${ms.unlocked ? '' : 'locked'} ${open ? 'open' : ''} ${ms.done ? 'done-mod' : ''}">
       <button class="mod-head" data-toggle>
         <span class="mod-num ${ms.done ? 'done' : ''}">${ms.done ? icon('check') : String(i + 1).padStart(2, '0')}</span>
         <div style="flex:1;min-width:0"><div class="mod-title">${esc(m.title)}</div><div class="mod-sub">${esc(m.summary || '')}</div></div>
-        <span class="pill">${ms.lessonsDone}/${m.lessons.length}</span>
+        <span class="mono dim" style="font-size:12px">${ms.lessonsDone}/${m.lessons.length}</span>
         ${ms.unlocked ? '' : `<span class="dim">${icon('lock')}</span>`}
         <span class="chev">${icon('chevron')}</span>
       </button>
@@ -451,14 +444,14 @@ function quiz() {
   if (!quizSession || quizSession.key !== key) quizSession = { key, answers: Array(q.questions.length).fill(null), submitted: false, pct: 0 };
   const qs = quizSession;
   const pass = S.passScore(q);
-  const okMsg = { exam: 'Domaine validé. Gloire au travailleur studieux, Camarade !', quiz: 'Module validé, le suivant est débloqué.', exercise: 'Bien joué, la leçon est acquise.' }[kind];
+  const okMsg = { exam: 'Domaine validé. Gloire au travailleur studieux, Camarade', quiz: 'Module validé, le suivant est débloqué', exercise: 'La leçon est acquise' }[kind];
 
   const result = qs.submitted ? `
     <div class="card result">
       <span class="pill ${qs.pct >= pass ? 'ok' : 'ko'}">${qs.pct >= pass ? 'Réussi' : 'Pas encore'}</span>
       <div class="score" style="color:${qs.pct >= pass ? 'var(--green)' : 'var(--red)'}">${qs.pct}%</div>
       <div class="muted">${qs.correct}/${q.questions.length} bonnes réponses · seuil ${pass} %</div>
-      <div class="muted" style="margin-top:6px">${qs.pct >= pass ? okMsg : 'Relis les corrections ci-dessous puis retente ta chance.'}</div>
+      <div class="muted" style="margin-top:6px">${qs.pct >= pass ? okMsg : 'Relis les corrections ci-dessous puis retente ta chance'}</div>
       <div class="flex" style="justify-content:center;margin-top:18px">
         <button class="btn" data-action="retry-quiz">${icon('refresh')}Recommencer</button>
         <button class="btn btn-primary" data-go='${JSON.stringify(back)}'>${kind === 'exercise' ? 'Retour à la leçon' : 'Retour au domaine'}</button>
@@ -526,7 +519,7 @@ function exams() {
   const list = examList();
   return `
   <div class="page-head"><div><div class="eyebrow">Évaluations</div><h1 class="h1">Tests & examens</h1>
-  <div class="sub">Un test clôt chaque module, un examen final valide le domaine.</div></div></div>
+  <div class="sub">Un test clôt chaque module, un examen final valide le domaine</div></div></div>
   <div class="card">${list.length ? `<table class="tbl"><thead><tr><th>Domaine</th><th>Épreuve</th><th>Type</th><th>Statut</th><th class="num">Essais</th><th class="num">Meilleur</th></tr></thead><tbody>
     ${list.map((e) => `<tr class="${e.available ? 'click' : ''}" ${e.available ? `data-go='${JSON.stringify(e.go)}'` : ''}>
       <td><span class="flex"><span class="cdot" style="color:${e.d.color}"></span>${esc(e.d.name)}</span></td>
@@ -682,7 +675,7 @@ function rhythmModal(d) {
   const sc = { minutes: PL.schedule(d).minutes, days: [...PL.schedule(d).days] };
   const p = PL.plan(d);
   openModal(`
-    <div class="modal-head"><div class="h2">Rythme · ${esc(d.name)}</div><div class="muted" style="margin-top:4px">Le planning et la date de fin seront recalculés à partir d'aujourd'hui.</div></div>
+    <div class="modal-head"><div class="h2">Rythme · ${esc(d.name)}</div><div class="muted" style="margin-top:4px">Le planning et la date de fin seront recalculés à partir d'aujourd'hui</div></div>
     <div class="modal-body">${rhythmFields(sc)}</div>
     <div class="modal-foot"><button class="btn btn-ghost" data-close>Annuler</button><button class="btn btn-primary" id="rSave">Enregistrer</button></div>`,
   (m) => {
@@ -699,7 +692,7 @@ function rhythmModal(d) {
 function newDomainModal() {
   const f = { color: COLORS[state.domains.length % COLORS.length], icon: 'book', level: 'Débutant', unit: 'mois' };
   openModal(`
-    <div class="modal-head"><div class="h2">Nouveau domaine</div><div class="muted" style="margin-top:4px">Définis ce que tu veux apprendre ; le cursus sera construit ensuite.</div></div>
+    <div class="modal-head"><div class="h2">Nouveau domaine</div><div class="muted" style="margin-top:4px">Choisis ton rythme, puis un cours de la bibliothèque ou un domaine à construire</div></div>
     <div class="modal-body">
       ${rhythmFields(PL.DEFAULT_SCHEDULE)}
       ${catalog.length ? `<div class="field"><label>Depuis la bibliothèque</label><div class="lib">${catalog.map((c) => {
