@@ -21,7 +21,8 @@ Pour chaque demande : analyser, puis recommander un modèle avant de toucher à 
 - Questions : QCM (`choices`/`answer`) ou réponse écrite (`type: "text"`, `accept: [...]`), exercice optionnel par leçon (`exercise`)
 - Audio des leçons : champ `audio: [{title, src}]` par leçon ou `<div class="audio" data-src data-title>` dans le contenu ; fichiers dans `src/audio/<domaine>/`
 - Police : Inter variable embarquée (`src/fonts/`), aucun effet néon/halo
-- DA : sombre, coins arrondis, pastilles fenêtre à droite (orange réduire, vert agrandir, rouge fermer)
+- DA : sombre (fond #0b0b0c), style macOS (barre latérale translucide Mica, contrôles segmentés, listes groupées), passe unslop, accent ambre = « aujourd'hui », pastilles fenêtre à droite (orange réduire, vert agrandir, rouge fermer)
+- Navigation : Accueil (domaines + séance du jour) → espace domaine (onglets Parcours / Planning / Progression / Examens) ; profil (nom + photo en dataURL dans `state.profile`) via le bas de la barre latérale
 
 INSTRUCTIONS CLAUDE — VIBECODING D’APPS ANDROID
 

@@ -8,7 +8,8 @@ function blank() {
     domains: [],
     seeded: false,
     progress: { lessons: {}, attempts: {}, log: {} },
-    settings: { collapsed: false }
+    settings: { collapsed: false },
+    profile: { name: 'Camarade', avatar: null }
   };
 }
 
@@ -23,6 +24,7 @@ function load() {
     s.progress.attempts ||= {};
     s.progress.log ||= {};
     s.settings ||= { collapsed: false };
+    s.profile ||= { name: 'Camarade', avatar: null };
     return s;
   } catch {
     return blank();
@@ -225,6 +227,7 @@ export function importAll(text) {
   state.domains = s.domains;
   state.progress = s.progress;
   state.settings = s.settings || state.settings;
+  state.profile = s.profile || state.profile;
   save();
 }
 

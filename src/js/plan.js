@@ -85,7 +85,17 @@ function allocate(list, sc, from, firstCapacity) {
   return { days, end: keys.length ? keys[keys.length - 1] : null };
 }
 
+const cache = new Map();
+export function resetCache() { cache.clear(); }
+
 export function plan(d) {
+  if (cache.has(d.id)) return cache.get(d.id);
+  const res = computePlan(d);
+  cache.set(d.id, res);
+  return res;
+}
+
+function computePlan(d) {
   const sc = schedule(d);
   const all = items(d);
   const todayK = S.today();

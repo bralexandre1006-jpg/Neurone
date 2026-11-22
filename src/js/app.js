@@ -14,48 +14,54 @@ const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padSt
 const fmtDate = (k, opt = { day: 'numeric', month: 'long' }) => new Date(k + 'T12:00:00').toLocaleDateString('fr-FR', opt);
 const fmtDuration = (w) => (w % 4 === 0 && w >= 8 ? plural(w / 4, 'mois').replace('moiss', 'mois') : plural(w, 'semaine'));
 
-let route = { name: 'overview' };
+let route = { name: 'home' };
 let catalog = [];
 let quizSession = null;
 
 /* ---------------- Navigation ---------------- */
 function go(r) {
+  if (r.name === 'domains' || r.name === 'overview' || r.name === 'progress' || r.name === 'exams') r = { name: 'home' };
   route = r;
   stopAudio();
+  closeMenu();
   if (r.name !== 'quiz') quizSession = null;
   render();
   $('#view').scrollTop = 0;
 }
 
-const NAV = [
-  { name: 'overview', label: "Vue d'ensemble", ico: 'home' },
-  { name: 'domains', label: 'Domaines', ico: 'grid', count: () => state.domains.length },
-  { name: 'progress', label: 'Progression', ico: 'chart' },
-  { name: 'exams', label: 'Examens', ico: 'exam' },
-  { name: 'settings', label: 'Paramètres', ico: 'settings' }
-];
+const HOME = { name: 'home' };
+
+function avatarHTML(size = 30) {
+  const p = state.profile;
+  const initial = esc((p.name || 'C').trim().charAt(0).toUpperCase() || 'C');
+  return p.avatar
+    ? `<img class="avatar-img" src="${p.avatar}" alt="" style="width:${size}px;height:${size}px">`
+    : `<span class="avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.4)}px">${initial}</span>`;
+}
 
 function renderSidebar() {
-  const active = ['domain', 'lesson', 'quiz'].includes(route.name) ? 'domains' : route.name;
-  $('#nav').innerHTML = NAV.map((n) => `
-    <button class="nav-item ${active === n.name ? 'active' : ''}" data-nav="${n.name}" title="${n.label}">
-      ${icon(n.ico)}<span class="label">${n.label}</span>${n.count ? `<span class="count">${n.count()}</span>` : ''}
-    </button>`).join('');
+  const inDomain = ['domain', 'lesson', 'quiz'].includes(route.name);
+  $('#nav').innerHTML = `
+    <button class="nav-item ${route.name === 'home' ? 'active' : ''}" data-nav="home" title="Accueil">${icon('home')}<span class="label">Accueil</span></button>`;
   $('#domainNav').innerHTML = state.domains.length
     ? state.domains.map((d) => `
-      <button class="nav-item ${route.id === d.id ? 'active' : ''}" data-domain="${d.id}" title="${esc(d.name)}">
-        <span class="cdot" style="color:${d.color}"></span><span class="label">${esc(d.name)}</span>
+      <button class="nav-item ${inDomain && route.id === d.id ? 'active' : ''}" data-domain="${d.id}" title="${esc(d.name)}">
+        <span class="dom-ico" style="color:${d.color}">${icon(d.icon)}</span><span class="label">${esc(d.name)}</span>
         <span class="pct">${S.domainStats(d).pct}%</span>
       </button>`).join('')
-    : `<div class="dim" style="padding:4px 12px;font-size:12px">Aucun domaine</div>`;
+    : `<button class="nav-item" data-action="new-domain">${icon('plus')}<span class="label">Ajouter un domaine</span></button>`;
+  $('#navBottom').innerHTML = `
+    <button class="nav-item ${route.name === 'settings' ? 'active' : ''}" data-nav="settings" title="Paramètres">${icon('settings')}<span class="label">Paramètres</span></button>`;
+  $('#profileAvatar').innerHTML = avatarHTML(30);
+  $('#profileName').textContent = state.profile.name || 'Camarade';
   const st = S.streak();
-  $('#streakLabel').textContent = `Série : ${plural(st, 'jour')}`;
+  $('#streakLabel').textContent = st ? `Série de ${plural(st, 'jour')}` : 'Aucune série en cours';
 }
 
 function crumbs(items) {
   $('#crumbs').innerHTML = items.map((it, i) => {
     const last = i === items.length - 1;
-    const sep = i ? `<span class="sep">/</span>` : '';
+    const sep = i ? `<span class="sep">${icon('chevron')}</span>` : '';
     if (last) return `${sep}<span class="cur" data-tauri-drag-region>${esc(it.label)}</span>`;
     return `${sep}<button data-go='${JSON.stringify(it.go)}'>${esc(it.label)}</button>`;
   }).join('');
@@ -63,9 +69,10 @@ function crumbs(items) {
 
 /* ---------------- Views ---------------- */
 function render() {
+  PL.resetCache();
   renderSidebar();
-  const views = { overview, domains, domain, lesson, quiz, progress, exams, settings };
-  const fn = views[route.name] || overview;
+  const views = { home, domain, lesson, quiz, settings };
+  const fn = views[route.name] || home;
   const html = fn();
   if (html === null) return;
   $('#view').innerHTML = `<div class="view-inner">${html}</div>`;
@@ -73,85 +80,103 @@ function render() {
   requestAnimationFrame(() => document.querySelectorAll('[data-w]').forEach((el) => (el.style.width = el.dataset.w + '%')));
 }
 
-function statCard(title, ico, val, foot, art = '') {
-  return `<div class="card">${art}<div class="card-title">${icon(ico)}${title}</div><div class="stat-val">${val}</div><div class="stat-foot">${foot}</div></div>`;
+function statCard(title, ico, val, foot) {
+  return `<div class="card stat"><div class="card-title">${icon(ico)}${title}</div><div class="stat-val">${val}</div><div class="stat-foot">${foot}</div></div>`;
 }
 
 function bar(pct, color) {
   return `<div class="bar" style="color:${color}"><i data-w="${pct}" style="width:0"></i></div>`;
 }
 
-function overview() {
-  crumbs([{ label: "Vue d'ensemble" }]);
-  const now = new Date();
-  const all = state.domains.map((d) => ({ d, s: S.domainStats(d) }));
-  const lessonsDone = all.reduce((a, x) => a + x.s.lessonsDone, 0);
-  const lessonsTotal = all.reduce((a, x) => a + x.s.lessons, 0);
-  const global = all.length ? Math.round(all.reduce((a, x) => a + x.s.pct, 0) / all.length) : 0;
-  const ex = examList();
-  const passed = ex.filter((e) => e.passed).length;
-  const weekMin = minutesSince(7);
-  const st = S.streak();
+function nextStep(d) {
+  const s = S.domainStats(d);
+  const started = s.lessonsDone > 0 || Object.keys(state.progress.attempts).some((k) => k.startsWith(d.id + '/'));
+  const n = S.nextLesson(d);
+  if (!d.modules.length) return { empty: true };
+  if (!n) {
+    const done = s.pct === 100;
+    return { label: done ? 'Revoir' : 'Ouvrir', title: done ? 'Domaine terminé' : 'Tout est à jour', sub: done ? 'Toutes les leçons, tests et l\'examen sont validés' : 'Termine les tests en attente pour avancer', go: { name: 'domain', id: d.id, tab: 'parcours' }, done };
+  }
+  if (n.type === 'lesson') {
+    return { label: started ? 'Reprendre' : 'Commencer', title: n.lesson.title, sub: `Module ${n.mi + 1} · ${n.module.title} · ${n.lesson.minutes} min`, go: { name: 'lesson', id: d.id, mi: n.mi, li: n.module.lessons.indexOf(n.lesson) } };
+  }
+  if (n.type === 'quiz') {
+    return { label: 'Passer le test', title: n.module.quiz.title || `Test : ${n.module.title}`, sub: `Module ${n.mi + 1} · ${n.module.quiz.questions.length} questions · réussite à ${S.passScore(n.module.quiz)} %`, go: { name: 'quiz', id: d.id, mi: n.mi } };
+  }
+  return { label: "Passer l'examen", title: 'Examen final', sub: `${d.exam.questions.length} questions · réussite à ${S.passScore(d.exam)} %`, go: { name: 'quiz', id: d.id, mi: 'exam' } };
+}
 
+function home() {
+  crumbs([{ label: 'Accueil' }]);
+  const now = new Date();
+  const st = S.streak();
+  const week = minutesSince(7);
   return `
   <div class="page-head">
     <div>
-      <h1 class="h1">${MONTHS[now.getMonth()]} <span class="soft">${now.getFullYear()}</span></h1>
+      <div class="who-row">${avatarHTML(22)}<span>${esc(state.profile.name || 'Camarade')}</span></div>
+      <h1 class="h1">Aujourd'hui</h1>
+      <div class="sub">${now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} · ${st ? `série de ${plural(st, 'jour')}` : 'pas encore de série'} · ${fmtMin(week)} d'étude cette semaine</div>
     </div>
-    <button class="btn btn-primary" data-action="new-domain">${icon('plus')}Nouveau domaine</button>
+    <button class="btn" data-action="new-domain">${icon('plus')}Nouveau domaine</button>
   </div>
-
-  <div class="grid stats">
-    ${statCard('Progression globale', 'target', `${global}<small>%</small>`, `${plural(all.length, 'domaine')} en cours`)}
-    ${statCard('Série en cours', 'flame', `${st}<small>${st > 1 ? 'jours' : 'jour'}</small>`, st ? 'Le plan quinquennal avance' : 'Étudie aujourd\'hui pour lancer la série')}
-    ${statCard('Leçons terminées', 'book', `${lessonsDone}<small>/${lessonsTotal}</small>`, `${fmtMin(weekMin)} cette semaine`)}
-    ${statCard('Examens réussis', 'trophy', `${passed}<small>/${ex.length}</small>`, `${ex.filter((e) => e.available && !e.passed).length} à passer`)}
-  </div>
-
-  <div class="split">
-    <div class="card chart-card">
-      <div class="chart-head">
-        <div><div class="card-title" style="margin:0">${icon('clock')}Temps d'étude</div>
-        <div class="stat-val" style="margin-top:8px">${fmtMin(minutesSince(56))}</div>
-        <div class="stat-foot">8 dernières semaines</div></div>
-        <div class="legend">${state.domains.map((d) => `<span><i style="background:${d.color}"></i>${esc(d.name)}</span>`).join('')}</div>
+  <div class="home-grid">
+    <section>
+      <div class="section-title">Mes domaines</div>
+      <div class="dlist">
+        ${state.domains.map(homeDomainCard).join('')}
+        <button class="card new-row" data-action="new-domain"><span class="plus">${icon('plus')}</span><span><b>Nouveau domaine</b><small>Depuis la bibliothèque ou à construire</small></span></button>
       </div>
-      ${studyChart()}
-    </div>
-
-    <div class="grid" style="align-content:start">
+    </section>
+    <section>
+      <div class="section-title">Séance du jour</div>
       <div class="card today">${todayCard()}</div>
-      <div class="card">
-        <div class="flex between" style="margin-bottom:6px"><div class="h2">Mes domaines</div><button class="btn btn-ghost btn-sm" data-nav="domains">Tout voir ${icon('right')}</button></div>
-        <div class="list">${all.length ? all.slice(0, 5).map(({ d, s }) => `
-          <button class="row" data-domain="${d.id}" style="text-align:left;width:100%">
-            <span class="cdot" style="color:${d.color}"></span>
-            <div class="row-main"><div class="row-title">${esc(d.name)}</div>${bar(s.pct, d.color)}</div>
-            <span class="row-end">${s.pct}%</span>
-          </button>`).join('') : `<div class="dim" style="padding:12px 0">Aucun domaine pour l'instant.</div>`}</div>
-      </div>
+    </section>
+  </div>`;
+}
+
+function homeDomainCard(d) {
+  const s = S.domainStats(d);
+  const n = nextStep(d);
+  const p = d.modules.length ? PL.plan(d) : null;
+  return `
+  <div class="card dcard" data-domain="${d.id}">
+    <div class="dcard-top">
+      <div class="dc-icon" style="color:${d.color}">${icon(d.icon)}</div>
+      <div class="dcard-name"><div class="dc-name">${esc(d.name)}</div><div class="dim" style="font-size:12px">${esc(d.level)}${p && p.end && !p.finished ? ` · fin prévue le ${fmtDate(p.end, { day: 'numeric', month: 'short' })}` : ''}</div></div>
+      <div class="dcard-pct mono">${s.pct}%</div>
     </div>
+    ${bar(s.pct, d.color)}
+    ${n.empty
+      ? `<div class="dcard-next"><div><div class="dim" style="font-size:12px">Cursus à construire</div><div class="next-title">Importe un cursus pour commencer</div></div>
+         <button class="btn btn-sm" data-go='${JSON.stringify({ name: 'domain', id: d.id })}'>Ouvrir</button></div>`
+      : `<div class="dcard-next"><div style="min-width:0"><div class="dim" style="font-size:12px">${n.done ? 'Terminé' : 'Prochaine étape'}</div><div class="next-title">${esc(n.title)}</div><div class="dim next-sub">${esc(n.sub)}</div></div>
+         <button class="btn ${n.done ? '' : 'btn-primary'}" data-go='${JSON.stringify(n.go)}'>${n.label}${icon('right')}</button></div>`}
   </div>`;
 }
 
 const TYPE_ICO = { lesson: 'book', quiz: 'exam', exam: 'trophy' };
 
-function todayCard() {
+function todayRows(list) {
   const todayK = S.today();
   const rows = [];
   let plannedMin = 0, doneMin = 0, nextK = null;
-  state.domains.filter((d) => d.modules.length).forEach((d) => {
+  list.filter((d) => d.modules.length).forEach((d) => {
     const p = PL.plan(d);
     p.doneToday.forEach((it) => { rows.push({ d, it, done: true, min: it.minutes }); doneMin += it.minutes; plannedMin += it.minutes; });
     p.todayPlanned.forEach((it) => { rows.push({ d, it, done: false, min: it.planned }); plannedMin += it.planned; });
     for (const k of p.days.keys()) if (k > todayK && (!nextK || k < nextK)) { nextK = k; break; }
   });
-  const now = new Date();
-  const head = `<div class="flex between"><div class="card-title" style="margin:0">${icon('calendar')}Aujourd'hui · ${now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-    ${plannedMin ? `<span class="mono dim" style="font-size:11.5px">${doneMin} / ${plannedMin} min</span>` : ''}</div>`;
+  return { rows, plannedMin, doneMin, nextK };
+}
+
+function todayCard(list = state.domains, compact = false) {
+  const { rows, plannedMin, doneMin, nextK } = todayRows(list);
+  const head = `<div class="flex between"><div class="card-title" style="margin:0">${icon('calendar')}${compact ? "Aujourd'hui" : new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+    ${plannedMin ? `<span class="mono dim" style="font-size:12px">${doneMin} / ${plannedMin} min</span>` : ''}</div>`;
   if (!rows.length) {
-    return `${head}<div class="lesson-name" style="margin-top:14px">Jour de repos</div>
-      <div class="muted" style="font-size:12.5px">${nextK ? `Prochaine séance ${fmtDate(nextK, { weekday: 'long', day: 'numeric', month: 'long' })}. Le repos fait partie du plan, Camarade.` : 'Ajoute un domaine pour lancer ton planning.'}</div>`;
+    return `${head}<div class="rest-title">Jour de repos</div>
+      <div class="muted" style="font-size:13px">${nextK ? `Prochaine séance ${fmtDate(nextK, { weekday: 'long', day: 'numeric', month: 'long' })}. Le repos fait partie du plan, Camarade` : 'Ajoute un domaine pour lancer ton planning'}</div>`;
   }
   const first = rows.find((r) => !r.done);
   return `${head}
@@ -159,11 +184,11 @@ function todayCard() {
     <div class="today-list">${rows.map((r) => `
       <button class="today-item ${r.done ? 'done' : ''}" data-go='${JSON.stringify(r.it.go)}'>
         <span class="check ${r.done ? 'on' : ''}">${r.done ? icon('check') : ''}</span>
-        <span class="cdot" style="color:${r.d.color};margin:0"></span>
+        ${compact ? '' : `<span class="cdot" style="color:${r.d.color};margin:0"></span>`}
         <span class="t">${esc(r.it.title)}${r.it.cont && !r.done ? ' <span class="dim">(partie)</span>' : ''}</span>
         <span class="m">${r.min} min</span>
       </button>`).join('')}</div>
-    ${first ? `<button class="btn btn-primary" style="margin-top:14px" data-go='${JSON.stringify(first.it.go)}'>Commencer la séance${icon('right')}</button>` : `<div class="up" style="margin-top:12px;font-size:12.5px">Séance du jour accomplie. Le plan avance, Camarade</div>`}`;
+    ${first ? (compact ? '' : `<button class="btn btn-primary" style="margin-top:16px;width:100%" data-go='${JSON.stringify(first.it.go)}'>Commencer la séance${icon('right')}</button>`) : `<div class="up" style="margin-top:12px;font-size:13px">Séance du jour accomplie. Le plan avance, Camarade</div>`}`;
 }
 
 function planCard(d) {
@@ -184,7 +209,7 @@ function planCard(d) {
       ${c.plannedMin || c.doneMin ? `<span class="cal-bar"><i style="width:${Math.min(100, Math.round(((c.past ? c.doneMin : c.plannedMin + (c.today ? c.doneMin : 0)) / sc.minutes) * 100))}%"></i></span>` : ''}
     </div>`;
   }).join('')}</div>`).join('');
-  return `<div class="card plan-card section-gap" style="margin:0 0 14px">
+  return `<div class="card plan-card">
     <div class="plan-top">
       <div class="plan-stats">
         <div><div class="eyebrow" style="margin-bottom:6px">Rythme</div><div class="plan-val">${sc.minutes} min</div><div class="dim" style="font-size:12px">${PL.daysLabel(sc.days)} · ${fmtMin(PL.weeklyMinutes(sc))}/sem.</div></div>
@@ -202,31 +227,31 @@ function planCard(d) {
   </div>`;
 }
 
-function minutesSince(days) {
+function minutesSince(days, domainId = null) {
   const from = new Date(); from.setDate(from.getDate() - days + 1);
   const k = S.today(from);
   let t = 0;
-  for (const [day, v] of Object.entries(state.progress.log)) if (day >= k) t += Object.values(v).reduce((a, b) => a + b, 0);
+  for (const [day, v] of Object.entries(state.progress.log)) {
+    if (day < k) continue;
+    t += domainId ? (v[domainId] || 0) : Object.values(v).reduce((a, b) => a + b, 0);
+  }
   return t;
 }
 
 function weekBuckets(n = 8) {
   const start = new Date(); start.setHours(0, 0, 0, 0);
   start.setDate(start.getDate() - ((start.getDay() + 6) % 7) - (n - 1) * 7);
-  const weeks = Array.from({ length: n }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i * 7); return d; });
-  return weeks;
+  return Array.from({ length: n }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i * 7); return d; });
 }
 
-function studyChart() {
+function studyChart(list) {
   const weeks = weekBuckets(8);
   const keys = weeks.map((w) => S.today(w));
-  const series = state.domains.map((d) => {
+  const series = list.map((d) => {
     const vals = keys.map(() => 0);
     for (const [day, v] of Object.entries(state.progress.log)) {
       if (!v[d.id]) continue;
-      let idx = -1;
-      for (let i = keys.length - 1; i >= 0; i--) if (day >= keys[i]) { idx = i; break; }
-      if (idx >= 0) vals[idx] += v[d.id];
+      for (let i = keys.length - 1; i >= 0; i--) if (day >= keys[i]) { vals[i] += v[d.id]; break; }
     }
     return { color: d.color, vals };
   });
@@ -246,44 +271,10 @@ function studyChart() {
     return d;
   };
   const grid = [0, 1, 2, 3, 4].map((i) => `<line class="grid-line" x1="0" x2="${W}" y1="${(i / 4) * H}" y2="${(i / 4) * H}"/>`).join('');
-  const curves = series.map((s, i) => {
-    const d = path(s.vals);
-    return `<defs><linearGradient id="g${i}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${s.color}"/><stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient></defs>
-      <path class="area" d="${d} L${W},${H} L0,${H} Z" fill="url(#g${i})"/>
-      <path class="curve" d="${d}" stroke="${s.color}"/>`;
-  }).join('');
+  const curves = series.map((s) => `<path class="curve" d="${path(s.vals)}" stroke="${s.color}"/>`).join('');
   const yl = [4, 3, 2, 1, 0].map((i) => `<span>${Math.round((top * i) / 4)}m</span>`).join('');
   const xl = weeks.map((w) => `<span>${String(w.getDate()).padStart(2, '0')}/${String(w.getMonth() + 1).padStart(2, '0')}</span>`).join('');
   return `<div class="chart"><div class="y-labels">${yl}</div><div class="plot"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${grid}${curves}</svg></div></div><div class="x-labels">${xl}</div>`;
-}
-
-function domains() {
-  crumbs([{ label: 'Domaines' }]);
-  return `
-  <div class="page-head">
-    <div><div class="eyebrow">Bibliothèque</div><h1 class="h1">Domaines <span class="soft">${state.domains.length}</span></h1>
-    <div class="sub">Chaque domaine est un cursus complet : modules, leçons, tests et examen final</div></div>
-    <button class="btn btn-primary" data-action="new-domain">${icon('plus')}Nouveau domaine</button>
-  </div>
-  <div class="grid domains">
-    ${state.domains.map(domainCard).join('')}
-    <button class="card new-card" data-action="new-domain"><div><div class="plus">${icon('plus')}</div>Nouveau domaine<div class="dim" style="font-size:12px;margin-top:4px">Anglais, philosophie, code…</div></div></button>
-  </div>`;
-}
-
-function domainCard(d) {
-  const s = S.domainStats(d);
-  const empty = !d.modules.length;
-  return `
-  <div class="card domain-card" data-domain="${d.id}" style="color:${d.color}">
-    <div class="dc-head">
-      <div class="dc-icon" style="color:${d.color}">${icon(d.icon)}</div>
-      ${empty ? `<span class="pill wait">Cursus à construire</span>` : d.demo ? `<span class="pill">Démo</span>` : s.pct === 100 ? `<span class="pill ok">Terminé</span>` : ''}
-    </div>
-    <div><div class="dc-name">${esc(d.name)}</div><div class="dc-desc">${esc(d.description || d.goal || '')}</div></div>
-    <div class="dc-meta"><span class="pill">${icon('clock')}${PL.schedule(d).minutes} min/j</span>${!empty && PL.plan(d).end ? `<span class="pill">fin ${fmtDate(PL.plan(d).end, { day: 'numeric', month: 'short' })}</span>` : ''}<span class="pill">${esc(d.level)}</span><span class="pill">${plural(s.modules, 'module')}</span></div>
-    <div><div class="dc-foot"><span>${s.lessonsDone}/${s.lessons} leçons</span><span>${s.pct}%</span></div>${bar(s.pct, d.color)}</div>
-  </div>`;
 }
 
 function exBadge(d, l) {
@@ -292,52 +283,67 @@ function exBadge(d, l) {
   return b === null ? '' : `<span class="pill ${b >= S.passScore(l.exercise) ? 'ok' : 'ko'}">${b}%</span>`;
 }
 
-function ring(pct, color) {
+function ring(pct, color, size = 72) {
   const c = 2 * Math.PI * 40;
-  return `<div class="ring" style="color:${color}"><svg viewBox="0 0 92 92"><circle class="track" cx="46" cy="46" r="40"/><circle class="val" cx="46" cy="46" r="40" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}"/></svg><b>${pct}%</b></div>`;
+  return `<div class="ring" style="color:${color};width:${size}px;height:${size}px"><svg viewBox="0 0 92 92"><circle class="track" cx="46" cy="46" r="40"/><circle class="val" cx="46" cy="46" r="40" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}"/></svg><b>${pct}%</b></div>`;
 }
+
+const TABS = [
+  { id: 'parcours', label: 'Parcours' },
+  { id: 'planning', label: 'Planning' },
+  { id: 'progression', label: 'Progression' },
+  { id: 'examens', label: 'Examens' }
+];
 
 function domain() {
   const d = S.getDomain(route.id);
-  if (!d) return (go({ name: 'domains' }), null);
-  crumbs([{ label: 'Domaines', go: { name: 'domains' } }, { label: d.name }]);
+  if (!d) return (go(HOME), null);
+  const tab = TABS.some((t) => t.id === route.tab) ? route.tab : 'parcours';
+  crumbs([{ label: 'Accueil', go: HOME }, { label: d.name }]);
   const s = S.domainStats(d);
+  const n = nextStep(d);
+
   const head = `
-  <div class="hero">
-    <div style="min-width:0">
-      <div class="eyebrow" style="display:flex;align-items:center;gap:8px"><span class="cdot" style="color:${d.color};margin:0"></span>${esc(d.level)}${d.demo ? ' · démo' : ''}</div>
+  <div class="dhero">
+    <div class="dc-icon big" style="color:${d.color}">${icon(d.icon)}</div>
+    <div style="min-width:0;flex:1">
       <h1 class="h1">${esc(d.name)}</h1>
-      <div class="sub">${esc(d.goal || d.description || '')}</div>
-      <div class="hero-meta">
-        <span class="pill">${icon('clock')}${PL.schedule(d).minutes} min · ${PL.daysLabel(PL.schedule(d).days)}</span>
-        <span class="pill">${plural(s.modules, 'module')}</span>
-        <span class="pill">${s.lessonsDone}/${s.lessons} leçons</span>
-        <span class="pill">${fmtMin(PL.plan(d).totalMin)} au total</span>
-      </div>
-      ${d.source ? `<div class="source">Source : ${esc(d.source.name)}${d.source.note ? ` · ${esc(d.source.note)}` : ''}</div>` : ''}
+      <div class="sub">${esc(d.level)} · ${plural(s.modules, 'module')} · ${s.lessons} leçons${d.source ? ` · source ${esc(d.source.name)}` : ''}</div>
     </div>
-    <div class="flex" style="gap:16px">
-      ${ring(s.pct, d.color)}
-      <div style="display:grid;gap:6px">
-        <button class="btn btn-sm" data-action="import-curriculum" data-id="${d.id}">${icon('upload')}Importer un cursus</button>
-        <button class="btn btn-sm btn-danger" data-action="delete-domain" data-id="${d.id}">${icon('trash')}Supprimer</button>
-      </div>
-    </div>
+    ${d.modules.length ? ring(s.pct, d.color) : ''}
+    <button class="icon-btn menu-btn" data-action="domain-menu" data-id="${d.id}" title="Options">${icon('more')}</button>
   </div>`;
 
-  if (!d.modules.length) {
+  if (n.empty) {
     return head + `<div class="card empty">
       <div class="em-ico">${icon('sparkle')}</div>
       <h3>Le cursus n'est pas encore construit</h3>
-      <p>Demande à Claude de générer le programme « ${esc(d.name)} » sur ${fmtDuration(d.durationWeeks)}, au rythme de ${PL.schedule(d).minutes} min ${PL.daysLabel(PL.schedule(d).days)} (≈ ${fmtMin(PL.weeklyMinutes(PL.schedule(d)) * d.durationWeeks)} de travail), puis importe le fichier JSON ici. Les modules, leçons, tests et l'examen final apparaîtront automatiquement.</p>
+      <p>Demande à Claude de générer le programme « ${esc(d.name)} » sur ${fmtDuration(d.durationWeeks)}, au rythme de ${PL.schedule(d).minutes} min ${PL.daysLabel(PL.schedule(d).days)} (≈ ${fmtMin(PL.weeklyMinutes(PL.schedule(d)) * d.durationWeeks)} de travail), puis importe le fichier JSON ici</p>
       <button class="btn btn-primary" data-action="import-curriculum" data-id="${d.id}">${icon('upload')}Importer un cursus (.json)</button>
     </div>`;
   }
 
+  const resume = `
+  <div class="resume">
+    <div class="card resume-main">
+      <div class="eyebrow">${n.done ? 'Terminé' : n.label === 'Commencer' ? 'Pour commencer' : 'Prochaine étape'}</div>
+      <div class="resume-title">${esc(n.title)}</div>
+      <div class="muted" style="font-size:13px">${esc(n.sub)}</div>
+      <div style="margin-top:20px"><button class="btn btn-primary btn-lg" data-go='${JSON.stringify(n.go)}'>${n.label}${icon('right')}</button></div>
+    </div>
+    <div class="card resume-today">${todayCard([d], true)}</div>
+  </div>`;
+
+  const tabs = `<div class="segmented" role="tablist">${TABS.map((t) => `<button class="${t.id === tab ? 'on' : ''}" data-go='${JSON.stringify({ name: 'domain', id: d.id, tab: t.id })}'>${t.label}</button>`).join('')}</div>`;
+  const body = { parcours: domainParcours, planning: (x) => planCard(x), progression: domainProgress, examens: domainExams }[tab](d);
+  return head + resume + tabs + `<div class="tab-body">${body}</div>`;
+}
+
+function domainParcours(d) {
   const firstOpen = d.modules.findIndex((_, i) => !S.moduleState(d, i).done);
   const mods = d.modules.map((m, i) => {
     const ms = S.moduleState(d, i);
-    const open = route.open ? route.open === i : i === (firstOpen < 0 ? 0 : firstOpen);
+    const open = route.open !== undefined ? route.open === i : i === (firstOpen < 0 ? 0 : firstOpen);
     const qBest = m.quiz ? S.bestScore(S.quizKey(d, m)) : null;
     return `
     <div class="card module ${ms.unlocked ? '' : 'locked'} ${open ? 'open' : ''} ${ms.done ? 'done-mod' : ''}">
@@ -357,31 +363,104 @@ function domain() {
         }).join('')}
         ${m.quiz ? `<button class="lesson quiz" ${ms.quizUnlocked ? '' : 'disabled'} data-go='${JSON.stringify({ name: 'quiz', id: d.id, mi: i })}'>
           <span class="check ${ms.quizPassed ? 'on' : ''}">${ms.quizPassed ? icon('check') : ''}</span>
-          <span class="t">Test de fin de module <span class="dim">· ${m.quiz.questions.length} questions</span></span>
+          <span class="t">${esc(m.quiz.title || 'Test de fin de module')} <span class="dim">· ${m.quiz.questions.length} questions</span></span>
           ${qBest !== null ? `<span class="pill ${ms.quizPassed ? 'ok' : 'ko'}">${qBest}%</span>` : ms.quizUnlocked ? `<span class="pill wait">À passer</span>` : `<span class="dim">${icon('lock')}</span>`}
         </button>` : ''}
       </div>
     </div>`;
   }).join('');
-
   let exam = '';
   if (d.exam) {
     const un = S.examUnlocked(d), best = S.bestScore(S.examKey(d)), ok = S.isPassed(S.examKey(d), d.exam);
-    exam = `<div class="card flex between section-gap" style="padding:18px">
-      <div class="flex" style="gap:14px"><span class="mod-num ${ok ? 'done' : ''}">${icon('trophy')}</span>
-      <div><div class="mod-title">Examen final</div><div class="mod-sub">${d.exam.questions.length} questions · seuil de réussite ${S.passScore(d.exam)} %${best !== null ? ` · meilleur score ${best} %` : ''}</div></div></div>
-      ${un ? `<button class="btn ${ok ? '' : 'btn-primary'}" data-go='${JSON.stringify({ name: 'quiz', id: d.id, mi: 'exam' })}'>${ok ? 'Repasser' : "Passer l'examen"}</button>` : `<span class="pill">${icon('lock')}Termine tous les modules</span>`}
+    exam = `<div class="card exam-row">
+      <div class="flex" style="gap:16px"><span class="mod-num ${ok ? 'done' : ''}">${icon('trophy')}</span>
+      <div><div class="mod-title">Examen final</div><div class="mod-sub">${d.exam.questions.length} questions · réussite à ${S.passScore(d.exam)} %${best !== null ? ` · meilleur score ${best} %` : ''}</div></div></div>
+      ${un ? `<button class="btn ${ok ? '' : 'btn-primary'}" data-go='${JSON.stringify({ name: 'quiz', id: d.id, mi: 'exam' })}'>${ok ? 'Repasser' : "Passer l'examen"}</button>` : `<span class="dim flex" style="font-size:12.5px">${icon('lock')}Termine tous les modules</span>`}
     </div>`;
   }
-  return head + planCard(d) + `<div class="timeline">${mods}</div>${exam}`;
+  return `<div class="timeline">${mods}</div>${exam}`;
+}
+
+function domainExamList(d) {
+  const out = [];
+  d.modules.forEach((m, i) => {
+    if (!m.quiz) return;
+    const k = S.quizKey(d, m), ms = S.moduleState(d, i);
+    out.push({ label: m.quiz.title || `Test du module ${i + 1}`, sub: m.title, available: ms.quizUnlocked, passed: ms.quizPassed, best: S.bestScore(k), tries: (state.progress.attempts[k] || []).length, n: m.quiz.questions.length, go: { name: 'quiz', id: d.id, mi: i } });
+  });
+  if (d.exam) {
+    const k = S.examKey(d);
+    out.push({ label: 'Examen final', sub: 'Valide le domaine', available: S.examUnlocked(d), passed: S.isPassed(k, d.exam), best: S.bestScore(k), tries: (state.progress.attempts[k] || []).length, n: d.exam.questions.length, go: { name: 'quiz', id: d.id, mi: 'exam' } });
+  }
+  return out;
+}
+
+function domainExams(d) {
+  const list = domainExamList(d);
+  if (!list.length) return `<div class="card">${emptyBlock('exam', 'Aucune épreuve', 'Ce cursus ne contient pas encore de test')}</div>`;
+  return `<div class="card group">${list.map((e) => `
+    <button class="group-row" ${e.available ? `data-go='${JSON.stringify(e.go)}'` : 'disabled'}>
+      <span class="mod-num small ${e.passed ? 'done' : ''}">${e.passed ? icon('check') : e.available ? icon('exam') : icon('lock')}</span>
+      <span class="gr-main"><span class="gr-title">${esc(e.label)}</span><span class="gr-sub">${esc(e.sub)} · ${e.n} questions${e.tries ? ` · ${plural(e.tries, 'essai')}` : ''}</span></span>
+      ${e.passed ? '<span class="pill ok">Réussi</span>' : e.available ? '<span class="pill wait">Disponible</span>' : '<span class="dim" style="font-size:12px">Verrouillé</span>'}
+      <span class="mono gr-score">${e.best !== null ? e.best + ' %' : '—'}</span>
+    </button>`).join('')}</div>`;
+}
+
+function domainProgress(d) {
+  const s = S.domainStats(d);
+  const total = Object.values(state.progress.log).reduce((a, v) => a + (v[d.id] || 0), 0);
+  const exScores = d.modules.flatMap((m) => m.lessons).filter((l) => l.exercise).map((l) => S.bestScore(S.exerciseKey(d, l))).filter((x) => x !== null);
+  const avg = exScores.length ? Math.round(exScores.reduce((a, b) => a + b, 0) / exScores.length) : null;
+  const passed = domainExamList(d).filter((e) => e.passed).length;
+  const nTests = domainExamList(d).length;
+
+  const days = 7 * 18;
+  const start = new Date(); start.setDate(start.getDate() - days + 1);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const cells = [];
+  for (const x = new Date(start); x <= new Date(); x.setDate(x.getDate() + 1)) {
+    const t = state.progress.log[S.today(x)]?.[d.id] || 0;
+    const l = t === 0 ? 0 : t < 15 ? 1 : t < 30 ? 2 : t < 60 ? 3 : 4;
+    cells.push(`<i data-l="${l}" title="${x.toLocaleDateString('fr-FR')} · ${t} min"></i>`);
+  }
+  const pre = d.id + '/';
+  const attempts = Object.entries(state.progress.attempts).filter(([k]) => k.startsWith(pre)).flatMap(([k, arr]) => arr.map((a) => ({ k, ...a }))).sort((a, b) => b.date - a.date).slice(0, 8);
+  const label = (k) => {
+    const [, mid, t] = k.split('/');
+    if (mid === 'exam') return 'Examen final';
+    const m = d.modules.find((x) => x.id === mid);
+    if (m) return m.quiz?.title ? `${m.quiz.title} · ${m.title}` : `Test · ${m.title}`;
+    const l = d.modules.flatMap((x) => x.lessons).find((x) => x.id === mid);
+    return l ? `Exercice · ${l.title}` : t;
+  };
+  return `
+  <div class="grid stats">
+    ${statCard('Avancement', 'target', `${s.pct}<small>%</small>`, `${plural(s.lessonsDone, 'leçon')} sur ${s.lessons}`)}
+    ${statCard('Temps étudié', 'clock', fmtMin(total), `${fmtMin(minutesSince(7, d.id))} cette semaine`)}
+    ${statCard('Exercices', 'book', avg !== null ? `${avg}<small>%</small>` : '—', avg !== null ? `moyenne sur ${plural(exScores.length, 'exercice')}` : 'aucun exercice fait')}
+    ${statCard('Tests réussis', 'trophy', `${passed}<small>/${nTests}</small>`, 'bilans et examen final')}
+  </div>
+  <div class="card chart-card">
+    <div class="card-title" style="margin:0">${icon('chart')}Temps d'étude par semaine</div>
+    ${studyChart([d])}
+  </div>
+  <div class="split section-gap">
+    <div class="card"><div class="h2" style="margin-bottom:16px">Activité</div><div class="heat">${cells.join('')}</div></div>
+    <div class="card"><div class="h2" style="margin-bottom:8px">Derniers résultats</div><div class="list">
+      ${attempts.length ? attempts.map((a) => `<div class="row">
+        <div class="row-main"><div class="row-title">${esc(label(a.k))}</div><div class="row-sub">${new Date(a.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</div></div>
+        <span class="row-end" style="color:${a.pct >= 70 ? 'var(--green)' : '#f07a7d'}">${a.pct}%</span></div>`).join('') : '<div class="dim" style="padding:8px 0;font-size:13px">Aucun résultat pour l\'instant</div>'}
+    </div></div>
+  </div>`;
 }
 
 function lesson() {
   const d = S.getDomain(route.id);
   const m = d?.modules[route.mi];
   const l = m?.lessons[route.li];
-  if (!l) return (go({ name: 'domains' }), null);
-  crumbs([{ label: 'Domaines', go: { name: 'domains' } }, { label: d.name, go: { name: 'domain', id: d.id } }, { label: l.title }]);
+  if (!l) return (go(HOME), null);
+  crumbs([{ label: 'Accueil', go: HOME }, { label: d.name, go: { name: 'domain', id: d.id } }, { label: l.title }]);
   const done = S.isLessonDone(d, l);
   const flat = d.modules.flatMap((mm, mi) => mm.lessons.map((_, li) => ({ mi, li })));
   const pos = flat.findIndex((x) => x.mi === route.mi && x.li === route.li);
@@ -437,10 +516,10 @@ function answerOk(x, a) {
 
 function quiz() {
   const c = quizCtx();
-  if (!c) return (go(S.getDomain(route.id) ? { name: 'domain', id: route.id } : { name: 'domains' }), null);
+  if (!c) return (go(S.getDomain(route.id) ? { name: 'domain', id: route.id } : HOME), null);
   const { d, q, key, title, kind } = c;
   const back = kind === 'exercise' ? { name: 'lesson', id: d.id, mi: route.mi, li: route.li } : { name: 'domain', id: d.id };
-  crumbs([{ label: 'Domaines', go: { name: 'domains' } }, { label: d.name, go: { name: 'domain', id: d.id } }, ...(kind === 'exercise' ? [{ label: c.l.title, go: back }] : []), { label: kind === 'exercise' ? 'Exercice' : title }]);
+  crumbs([{ label: 'Accueil', go: HOME }, { label: d.name, go: { name: 'domain', id: d.id } }, ...(kind === 'exercise' ? [{ label: c.l.title, go: back }] : []), { label: kind === 'exercise' ? 'Exercice' : title }]);
   if (!quizSession || quizSession.key !== key) quizSession = { key, answers: Array(q.questions.length).fill(null), submitted: false, pct: 0 };
   const qs = quizSession;
   const pass = S.passScore(q);
@@ -498,112 +577,141 @@ function quiz() {
   </div>`;
 }
 
-function examList() {
-  const out = [];
-  state.domains.forEach((d) => {
-    d.modules.forEach((m, i) => {
-      if (!m.quiz) return;
-      const k = S.quizKey(d, m), ms = S.moduleState(d, i);
-      out.push({ d, label: `Module ${i + 1} · ${m.title}`, kind: 'Test', key: k, q: m.quiz, available: ms.quizUnlocked, passed: ms.quizPassed, best: S.bestScore(k), tries: (state.progress.attempts[k] || []).length, go: { name: 'quiz', id: d.id, mi: i } });
-    });
-    if (d.exam) {
-      const k = S.examKey(d);
-      out.push({ d, label: 'Examen final', kind: 'Examen', key: k, q: d.exam, available: S.examUnlocked(d), passed: S.isPassed(k, d.exam), best: S.bestScore(k), tries: (state.progress.attempts[k] || []).length, go: { name: 'quiz', id: d.id, mi: 'exam' } });
-    }
-  });
-  return out;
-}
-
-function exams() {
-  crumbs([{ label: 'Examens' }]);
-  const list = examList();
-  return `
-  <div class="page-head"><div><div class="eyebrow">Évaluations</div><h1 class="h1">Tests & examens</h1>
-  <div class="sub">Un test clôt chaque module, un examen final valide le domaine</div></div></div>
-  <div class="card">${list.length ? `<table class="tbl"><thead><tr><th>Domaine</th><th>Épreuve</th><th>Type</th><th>Statut</th><th class="num">Essais</th><th class="num">Meilleur</th></tr></thead><tbody>
-    ${list.map((e) => `<tr class="${e.available ? 'click' : ''}" ${e.available ? `data-go='${JSON.stringify(e.go)}'` : ''}>
-      <td><span class="flex"><span class="cdot" style="color:${e.d.color}"></span>${esc(e.d.name)}</span></td>
-      <td>${esc(e.label)}</td><td class="muted">${e.kind}</td>
-      <td>${e.passed ? '<span class="pill ok">Réussi</span>' : e.available ? '<span class="pill wait">Disponible</span>' : `<span class="pill">${icon('lock')}Verrouillé</span>`}</td>
-      <td class="num muted">${e.tries}</td><td class="num">${e.best !== null ? e.best + ' %' : '—'}</td></tr>`).join('')}
-  </tbody></table>` : emptyBlock('exam', 'Aucune épreuve', 'Les tests apparaîtront dès que tes domaines auront un cursus.')}</div>`;
-}
-
-function progress() {
-  crumbs([{ label: 'Progression' }]);
-  const days = 7 * 18;
-  const start = new Date(); start.setDate(start.getDate() - days + 1);
-  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-  const cells = [];
-  for (const d = new Date(start); d <= new Date(); d.setDate(d.getDate() + 1)) {
-    const v = state.progress.log[S.today(d)];
-    const t = v ? Object.values(v).reduce((a, b) => a + b, 0) : 0;
-    const l = t === 0 ? 0 : t < 15 ? 1 : t < 30 ? 2 : t < 60 ? 3 : 4;
-    cells.push(`<i data-l="${l}" title="${d.toLocaleDateString('fr-FR')} · ${t} min"></i>`);
-  }
-  const attempts = Object.entries(state.progress.attempts).flatMap(([k, arr]) => arr.map((a) => ({ k, ...a }))).sort((a, b) => b.date - a.date).slice(0, 12);
-  const label = (k) => {
-    const [did, mid, t] = k.split('/');
-    const d = S.getDomain(did);
-    if (!d) return { d: null, t: k };
-    if (mid === 'exam') return { d, t: 'Examen final' };
-    const m = d.modules.find((x) => x.id === mid);
-    return { d, t: m ? `Test · ${m.title}` : t };
-  };
-  return `
-  <div class="page-head"><div><div class="eyebrow">Suivi</div><h1 class="h1">Progression</h1>
-  <div class="sub">${fmtMin(minutesSince(365))} d'étude cette année · série actuelle ${plural(S.streak(), 'jour')}</div></div></div>
-  <div class="card"><div class="flex between" style="margin-bottom:14px"><div class="h2">Activité</div>
-    <div class="flex dim" style="font-size:11px;gap:4px">Moins <span class="heat" style="grid-template-rows:13px"><i></i><i data-l="1"></i><i data-l="2"></i><i data-l="3"></i><i data-l="4"></i></span> Plus</div></div>
-    <div class="heat">${cells.join('')}</div></div>
-
-  <div class="split section-gap">
-    <div class="card"><div class="h2" style="margin-bottom:8px">Par domaine</div><div class="list">
-      ${state.domains.map((d) => { const s = S.domainStats(d); return `<button class="row" data-domain="${d.id}" style="width:100%;text-align:left">
-        <div class="dc-icon" style="color:${d.color};width:32px;height:32px">${icon(d.icon)}</div>
-        <div class="row-main"><div class="flex between"><span class="row-title">${esc(d.name)}</span><span class="row-end">${s.pct}%</span></div>
-        <div class="row-sub">${s.lessonsDone}/${s.lessons} leçons · ${plural(s.modules, 'module')} · ${PL.schedule(d).minutes} min ${PL.daysLabel(PL.schedule(d).days)}</div>${bar(s.pct, d.color)}</div></button>`; }).join('') || '<div class="dim">Aucun domaine.</div>'}
-    </div></div>
-    <div class="card"><div class="h2" style="margin-bottom:8px">Derniers résultats</div><div class="list">
-      ${attempts.length ? attempts.map((a) => { const L = label(a.k); return `<div class="row">
-        <span class="cdot" style="color:${L.d?.color || '#555'}"></span>
-        <div class="row-main"><div class="row-title">${esc(L.t)}</div><div class="row-sub">${esc(L.d?.name || '')} · ${new Date(a.date).toLocaleDateString('fr-FR')}</div></div>
-        <span class="row-end" style="color:${a.pct >= 70 ? 'var(--green)' : 'var(--red)'}">${a.pct}%</span></div>`; }).join('') : '<div class="dim" style="padding:10px 0">Aucun test passé pour l\'instant.</div>'}
-    </div></div>
-  </div>`;
-}
-
 function settings() {
   crumbs([{ label: 'Paramètres' }]);
   const size = new Blob([JSON.stringify(state)]).size;
   return `
-  <div class="page-head"><div><div class="eyebrow">Application</div><h1 class="h1">Paramètres</h1></div></div>
-  <div class="grid" style="max-width:760px">
-    <div class="card"><div class="h2">Sauvegarde</div>
-      <div class="muted" style="margin:6px 0 14px">Tes domaines et ta progression sont stockés localement sur ce PC (${(size / 1024).toFixed(1)} Ko). Exporte régulièrement une sauvegarde.</div>
-      <div class="flex"><button class="btn" data-action="export">${icon('download')}Exporter (.json)</button><button class="btn" data-action="import-all">${icon('upload')}Restaurer une sauvegarde</button></div></div>
-    <div class="card"><div class="h2">Format d'un cursus</div>
-      <div class="muted" style="margin:6px 0 12px">Un cursus importé dans un domaine est un fichier JSON :</div>
-      <pre class="mono" style="margin:0;font-size:11.5px;line-height:1.6;color:var(--text-2);background:#101012;border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto">{
+  <div class="page-head"><div><h1 class="h1">Paramètres</h1></div></div>
+  <div class="settings">
+    <div class="section-title">Profil</div>
+    <div class="card group">
+      <button class="group-row" data-action="profile">
+        ${avatarHTML(40)}
+        <span class="gr-main"><span class="gr-title">${esc(state.profile.name || 'Camarade')}</span><span class="gr-sub">Nom et photo de profil</span></span>
+        <span class="dim">${icon('chevron')}</span>
+      </button>
+    </div>
+
+    <div class="section-title">Données</div>
+    <div class="card group">
+      <button class="group-row" data-action="export">
+        <span class="gr-ico">${icon('download')}</span>
+        <span class="gr-main"><span class="gr-title">Exporter une sauvegarde</span><span class="gr-sub">Domaines, progression et profil · ${(size / 1024).toFixed(1)} Ko stockés sur ce PC</span></span>
+        <span class="dim">${icon('chevron')}</span>
+      </button>
+      <button class="group-row" data-action="import-all">
+        <span class="gr-ico">${icon('upload')}</span>
+        <span class="gr-main"><span class="gr-title">Restaurer une sauvegarde</span><span class="gr-sub">Remplace les données actuelles par celles du fichier</span></span>
+        <span class="dim">${icon('chevron')}</span>
+      </button>
+    </div>
+
+    <div class="section-title">Cursus</div>
+    <div class="card">
+      <div class="muted" style="font-size:13px;margin-bottom:12px">Un cursus importé dans un domaine est un fichier JSON</div>
+      <pre class="code">{
   "modules": [{
-    "title": "Les bases", "summary": "…", "week": 1,
+    "title": "Les bases", "summary": "…",
     "lessons": [{
       "title": "…", "minutes": 12, "content": "&lt;p&gt;HTML&lt;/p&gt;",
       "audio": [{ "title": "Dialogue", "src": "audio/anglais/m1-l1.mp3" }],
       "exercise": { "intro": "&lt;p&gt;Consigne&lt;/p&gt;", "questions": [ … ] }
     }],
     "quiz": { "passScore": 70, "questions": [
-      { "q": "…", "choices": ["a","b","c"], "answer": 1, "explain": "…" },
-      { "type": "text", "q": "She ____ (be) happy.", "accept": ["is", "'s"] }
+      { "q": "…", "choices": ["a","b","c"], "answer": 1 },
+      { "type": "text", "q": "She ____ happy.", "accept": ["is", "'s"] }
     ]}
   }],
   "exam": { "passScore": 75, "questions": [ … ] }
-}</pre></div>
-    <div class="card"><div class="h2">Zone sensible</div>
-      <div class="muted" style="margin:6px 0 14px">Efface toute la progression et les domaines, puis réinstalle le cours d'anglais.</div>
-      <button class="btn btn-danger" data-action="reset">${icon('trash')}Tout réinitialiser</button></div>
-    <div class="dim mono" style="font-size:11px;padding:4px 2px">Neurone v0.1.1</div>
+}</pre>
+    </div>
+
+    <div class="section-title">Zone sensible</div>
+    <div class="card group">
+      <button class="group-row danger" data-action="reset">
+        <span class="gr-ico">${icon('trash')}</span>
+        <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
+      </button>
+    </div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.2.0</div>
   </div>`;
+}
+
+/* ---------------- Profil & menus ---------------- */
+function resizeImage(file, size = 256) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const s = Math.min(img.width, img.height);
+      c.getContext('2d').drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.86));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible')); };
+    img.src = url;
+  });
+}
+
+function profileModal() {
+  const draft = { name: state.profile.name || 'Camarade', avatar: state.profile.avatar || null };
+  const preview = () => (draft.avatar
+    ? `<img src="${draft.avatar}" alt="">`
+    : `<span>${esc(draft.name.trim().charAt(0).toUpperCase() || 'C')}</span>`);
+  openModal(`
+    <div class="modal-head"><div class="h2">Profil</div></div>
+    <div class="modal-body">
+      <div class="profile-edit">
+        <button class="avatar-xl" id="pAvatar" title="Changer la photo">${preview()}<i>${icon('upload')}</i></button>
+        <div class="flex" style="gap:8px">
+          <button class="btn btn-sm" id="pPick">Choisir une photo</button>
+          <button class="btn btn-sm btn-ghost" id="pRemove" ${draft.avatar ? '' : 'hidden'}>Retirer</button>
+        </div>
+      </div>
+      <div class="field"><label>Nom</label><input id="pName" maxlength="32" value="${esc(draft.name)}"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-close>Annuler</button><button class="btn btn-primary" id="pSave">Enregistrer</button></div>`,
+  (m) => {
+    const refresh = () => { $('#pAvatar', m).innerHTML = preview() + `<i>${icon('upload')}</i>`; $('#pRemove', m).hidden = !draft.avatar; };
+    const pick = () => {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'image/*';
+      inp.onchange = async () => {
+        const f = inp.files[0]; if (!f) return;
+        try { draft.avatar = await resizeImage(f); refresh(); } catch (e) { toast(e.message, false); }
+      };
+      inp.click();
+    };
+    $('#pAvatar', m).onclick = pick;
+    $('#pPick', m).onclick = pick;
+    $('#pRemove', m).onclick = () => { draft.avatar = null; refresh(); };
+    $('#pName', m).addEventListener('input', (e) => { draft.name = e.target.value; if (!draft.avatar) refresh(); });
+    $('#pSave', m).onclick = () => {
+      state.profile = { name: draft.name.trim() || 'Camarade', avatar: draft.avatar };
+      S.save(); closeModal(); toast('Profil mis à jour'); render();
+    };
+  });
+}
+
+function closeMenu() { document.querySelector('.menu-pop')?.remove(); }
+
+function openMenu(anchor, items) {
+  closeMenu();
+  const r = anchor.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'menu-pop';
+  el.innerHTML = items.map((it) => it === '-' ? '<div class="menu-sep"></div>' : `<button class="menu-item ${it.danger ? 'danger' : ''}" data-mi="${it.id}">${icon(it.icon)}${it.label}</button>`).join('');
+  document.body.appendChild(el);
+  el.style.top = `${r.bottom + 6}px`;
+  el.style.left = `${Math.max(8, r.right - el.offsetWidth)}px`;
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-mi]'); if (!b) return;
+    e.stopPropagation();
+    closeMenu();
+    items.find((x) => x.id === b.dataset.mi)?.run();
+  });
 }
 
 function emptyBlock(ico, title, text) {
@@ -770,11 +878,21 @@ function download(name, text) {
 /* ---------------- Actions ---------------- */
 const actions = {
   'new-domain': newDomainModal,
+  profile: profileModal,
+  'domain-menu': (el) => {
+    const d = S.getDomain(el.dataset.id);
+    openMenu(el, [
+      ...(d.modules.length ? [{ id: 'r', icon: 'calendar', label: 'Modifier le rythme', run: () => rhythmModal(d) }] : []),
+      { id: 'i', icon: 'upload', label: d.modules.length ? 'Remplacer le cursus' : 'Importer un cursus', run: () => actions['import-curriculum'](el) },
+      '-',
+      { id: 'x', icon: 'trash', label: 'Supprimer le domaine', danger: true, run: () => actions['delete-domain'](el) }
+    ]);
+  },
   'edit-rhythm': (el) => rhythmModal(S.getDomain(el.dataset.id)),
   'delete-domain': (el) => {
     const d = S.getDomain(el.dataset.id);
     confirmModal('Supprimer ce domaine ?', `« ${esc(d.name)} » et toute sa progression seront supprimés définitivement.`, 'Supprimer', () => {
-      S.deleteDomain(d.id); toast('Domaine supprimé'); go({ name: 'domains' });
+      S.deleteDomain(d.id); toast('Domaine supprimé'); go(HOME);
     });
   },
   'import-curriculum': (el) => pickFile((text) => {
@@ -810,15 +928,16 @@ const actions = {
   'retry-quiz': () => { quizSession = null; render(); $('#view').scrollTop = 0; },
   export: () => { download(`neurone-sauvegarde-${S.today()}.json`, S.exportAll()); toast('Sauvegarde exportée'); },
   'import-all': () => pickFile((text) => confirmModal('Restaurer cette sauvegarde ?', 'Tes données actuelles seront remplacées par celles du fichier.', 'Restaurer', () => {
-    try { S.importAll(text); toast('Sauvegarde restaurée'); go({ name: 'overview' }); } catch (e) { toast(e.message, false); }
+    try { S.importAll(text); toast('Sauvegarde restaurée'); go(HOME); } catch (e) { toast(e.message, false); }
   })),
   reset: () => confirmModal('Tout réinitialiser ?', 'Toute ta progression et tes domaines seront effacés. Exporte une sauvegarde avant si besoin.', 'Réinitialiser', () => {
-    S.resetAll(); seed().finally(() => { toast('Application réinitialisée'); go({ name: 'overview' }); });
+    S.resetAll(); seed().finally(() => { toast('Application réinitialisée'); go(HOME); });
   })
 };
 
 document.addEventListener('click', (e) => {
   const t = e.target;
+  if (!t.closest('.menu-pop') && !t.closest('[data-action="domain-menu"]')) closeMenu();
   if (t.closest('[data-close]') || t.id === 'modalRoot') return closeModal();
   const a = t.closest('[data-action]');
   if (a && !a.disabled) return actions[a.dataset.action]?.(a);
@@ -906,6 +1025,9 @@ $('#collapseBtn').innerHTML = icon('sidebar');
 $('#collapseBtn').onclick = toggleSidebar;
 $('.search-ico').innerHTML = icon('search');
 $('#addDomainSide').innerHTML = icon('plus');
+$('#profileBtn').dataset.action = 'profile';
+if (window.__TAURI__) document.documentElement.classList.add('tauri');
+$('#view').addEventListener('scroll', () => $('.topbar').classList.toggle('scrolled', $('#view').scrollTop > 4), { passive: true });
 $('#addDomainSide').dataset.action = 'new-domain';
 $('#app').classList.toggle('collapsed', !!state.settings.collapsed);
 
