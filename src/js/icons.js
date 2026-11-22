@@ -43,4 +43,4 @@ export function icon(name, cls = '') {
   return `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[name] || P.book}</svg>`;
 }
 
-export const BRAND = `<svg viewBox="0 0 24 24" class="brand-mark"><g stroke="#e9e9ee" stroke-width="1.4" opacity=".75"><path d="M12 5 6.5 13M12 5l5.5 8M6.5 13h11M6.5 13 12 19.5M17.5 13 12 19.5M12 5v14.5"/></g><circle cx="12" cy="5" r="2.4" fill="#facc15"/><circle cx="6.5" cy="13" r="2.4" fill="#34d399"/><circle cx="17.5" cy="13" r="2.4" fill="#60a5fa"/><circle cx="12" cy="19.5" r="2.4" fill="#f472b6"/></svg>`;
+export const BRAND = `<img src="logo.png" alt="" class="brand-mark">`;
