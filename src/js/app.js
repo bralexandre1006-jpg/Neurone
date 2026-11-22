@@ -2,6 +2,7 @@ import { icon, BRAND, DOMAIN_ICONS } from './icons.js';
 import * as S from './store.js';
 import { initWindow } from './window.js';
 import { audioSlot, audioSay, hydrateAudio, stopAudio } from './audio.js';
+import * as PL from './plan.js';
 
 const { state } = S;
 const $ = (s, r = document) => r.querySelector(s);
@@ -10,6 +11,7 @@ const COLORS = ['#60a5fa', '#34d399', '#facc15', '#f472b6', '#a78bfa', '#fb923c'
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
 const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`);
+const fmtDate = (k, opt = { day: 'numeric', month: 'long' }) => new Date(k + 'T12:00:00').toLocaleDateString('fr-FR', opt);
 const fmtDuration = (w) => (w % 4 === 0 && w >= 8 ? plural(w / 4, 'mois').replace('moiss', 'mois') : plural(w, 'semaine'));
 
 let route = { name: 'overview' };
@@ -90,7 +92,6 @@ function overview() {
   const passed = ex.filter((e) => e.passed).length;
   const weekMin = minutesSince(7);
   const st = S.streak();
-  const next = state.domains.map((d) => ({ d, n: S.nextLesson(d) })).find((x) => x.n);
 
   const ringArt = `<div class="stat-art">${miniRing(global)}</div>`;
   return `
@@ -121,9 +122,7 @@ function overview() {
     </div>
 
     <div class="grid" style="align-content:start">
-      <div class="card continue">
-        ${next ? continueBlock(next.d, next.n) : `<div class="card-title">${icon('sparkle')}Continuer</div><div class="lesson-name">Rien en attente</div><div class="muted">Crée un domaine ou importe un cursus pour commencer.</div>`}
-      </div>
+      <div class="card today">${todayCard()}</div>
       <div class="card">
         <div class="flex between" style="margin-bottom:6px"><div class="h2">Mes domaines</div><button class="btn btn-ghost btn-sm" data-nav="domains">Tout voir ${icon('right')}</button></div>
         <div class="list">${all.length ? all.slice(0, 5).map(({ d, s }) => `
@@ -137,21 +136,72 @@ function overview() {
   </div>`;
 }
 
-function continueBlock(d, n) {
-  let title, sub, go, cta;
-  if (n.type === 'lesson') {
-    title = n.lesson.title; sub = `Module ${n.mi + 1} · ${n.module.title} · ${n.lesson.minutes} min`;
-    go = { name: 'lesson', id: d.id, mi: n.mi, li: n.module.lessons.indexOf(n.lesson) }; cta = 'Reprendre la leçon';
-  } else if (n.type === 'quiz') {
-    title = `Test : ${n.module.title}`; sub = `Module ${n.mi + 1} · ${n.module.quiz.questions.length} questions`;
-    go = { name: 'quiz', id: d.id, mi: n.mi }; cta = 'Passer le test';
-  } else {
-    title = 'Examen final'; sub = `${d.exam.questions.length} questions · seuil ${S.passScore(d.exam)} %`;
-    go = { name: 'quiz', id: d.id, mi: 'exam' }; cta = "Passer l'examen";
+const TYPE_ICO = { lesson: 'book', quiz: 'exam', exam: 'trophy' };
+
+function todayCard() {
+  const todayK = S.today();
+  const rows = [];
+  let plannedMin = 0, doneMin = 0, nextK = null;
+  state.domains.filter((d) => d.modules.length).forEach((d) => {
+    const p = PL.plan(d);
+    p.doneToday.forEach((it) => { rows.push({ d, it, done: true, min: it.minutes }); doneMin += it.minutes; plannedMin += it.minutes; });
+    p.todayPlanned.forEach((it) => { rows.push({ d, it, done: false, min: it.planned }); plannedMin += it.planned; });
+    for (const k of p.days.keys()) if (k > todayK && (!nextK || k < nextK)) { nextK = k; break; }
+  });
+  const now = new Date();
+  const head = `<div class="flex between"><div class="card-title" style="margin:0">${icon('calendar')}Aujourd'hui · ${now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+    ${plannedMin ? `<span class="mono dim" style="font-size:11.5px">${doneMin} / ${plannedMin} min</span>` : ''}</div>`;
+  if (!rows.length) {
+    return `${head}<div class="lesson-name" style="margin-top:14px">Jour de repos</div>
+      <div class="muted" style="font-size:12.5px">${nextK ? `Prochaine séance ${fmtDate(nextK, { weekday: 'long', day: 'numeric', month: 'long' })}. Le repos fait partie du plan, Camarade.` : 'Ajoute un domaine pour lancer ton planning.'}</div>`;
   }
-  return `<div><div class="card-title"><span class="cdot" style="color:${d.color}"></span>${esc(d.name)}</div>
-    <div class="lesson-name">${esc(title)}</div><div class="muted" style="font-size:12px">${esc(sub)}</div></div>
-    <div style="margin-top:18px"><button class="btn btn-primary" data-go='${JSON.stringify(go)}'>${cta}${icon('right')}</button></div>`;
+  const first = rows.find((r) => !r.done);
+  return `${head}
+    ${bar(plannedMin ? Math.round((doneMin / plannedMin) * 100) : 0, 'var(--green)')}
+    <div class="today-list">${rows.map((r) => `
+      <button class="today-item ${r.done ? 'done' : ''}" data-go='${JSON.stringify(r.it.go)}'>
+        <span class="check ${r.done ? 'on' : ''}">${r.done ? icon('check') : ''}</span>
+        <span class="cdot" style="color:${r.d.color};margin:0"></span>
+        <span class="t">${esc(r.it.title)}${r.it.cont && !r.done ? ' <span class="dim">(partie)</span>' : ''}</span>
+        <span class="m">${r.min} min</span>
+      </button>`).join('')}</div>
+    ${first ? `<button class="btn btn-primary" style="margin-top:14px" data-go='${JSON.stringify(first.it.go)}'>Commencer la séance${icon('right')}</button>` : `<div class="up" style="margin-top:12px;font-size:12.5px">Séance du jour accomplie. Le plan avance, Camarade !</div>`}`;
+}
+
+function planCard(d) {
+  PL.ensureTarget(d);
+  const p = PL.plan(d);
+  const st = PL.status(d, p);
+  const wk = PL.weeks(d, p);
+  const sc = p.sc;
+  const sessions = Math.ceil(p.remainingMin / sc.minutes);
+  const dow = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+  const cal = wk.rows.map((row) => `<div class="cal-row">${row.map((c) => {
+    const min = c.past || (c.today && !c.plannedMin) ? c.doneMin : c.plannedMin + (c.today ? c.doneMin : 0);
+    const cls = [c.study ? 'study' : 'rest', c.today ? 'today' : '', c.past ? 'past' : '', c.plannedMin ? 'has' : '', c.doneMin ? 'did' : ''].join(' ');
+    const tip = c.planned.map((x) => `• ${x.title} (${x.planned} min)`).join('\n');
+    return `<div class="cal-day ${cls}" title="${esc(fmtDate(c.k, { weekday: 'long', day: 'numeric', month: 'long' }) + (tip ? '\n' + tip : c.doneMin ? `\n${c.doneMin} min étudiées` : c.study ? '' : '\nRepos'))}">
+      <span class="cal-n">${c.date.getDate()}</span>
+      ${min ? `<span class="cal-min">${min}′</span>` : ''}
+      ${c.plannedMin || c.doneMin ? `<span class="cal-bar"><i style="width:${Math.min(100, Math.round(((c.past ? c.doneMin : c.plannedMin + (c.today ? c.doneMin : 0)) / sc.minutes) * 100))}%"></i></span>` : ''}
+    </div>`;
+  }).join('')}</div>`).join('');
+  return `<div class="card plan-card section-gap" style="margin:0 0 14px">
+    <div class="plan-top">
+      <div class="plan-stats">
+        <div><div class="eyebrow" style="margin-bottom:6px">Rythme</div><div class="plan-val">${sc.minutes} min</div><div class="dim" style="font-size:12px">${PL.daysLabel(sc.days)} · ${fmtMin(PL.weeklyMinutes(sc))}/sem.</div></div>
+        <div><div class="eyebrow" style="margin-bottom:6px">Reste</div><div class="plan-val">${fmtMin(p.remainingMin)}</div><div class="dim" style="font-size:12px">${plural(sessions, 'séance')}</div></div>
+        <div><div class="eyebrow" style="margin-bottom:6px">Fin prévue</div><div class="plan-val">${p.finished ? 'Terminé' : p.end ? fmtDate(p.end) : '—'}</div><div class="dim" style="font-size:12px">${d.schedule?.target && !p.finished ? `objectif ${fmtDate(d.schedule.target, { day: 'numeric', month: 'short' })}` : ''}</div></div>
+      </div>
+      <div class="flex">${st ? `<span class="pill ${st.kind === 'ok' ? 'ok' : st.kind === 'ko' ? 'ko' : ''}">${st.label}</span>` : ''}
+        <button class="btn btn-sm" data-action="edit-rhythm" data-id="${d.id}">${icon('settings')}Modifier le rythme</button></div>
+    </div>
+    <div class="cal">
+      <div class="cal-row cal-head">${dow.map((x) => `<span>${x}</span>`).join('')}</div>
+      ${cal}
+    </div>
+    ${wk.more ? `<div class="dim" style="font-size:11.5px;margin-top:8px">… et la suite jusqu'au ${fmtDate(p.end)}.</div>` : ''}
+  </div>`;
 }
 
 function miniRing(pct) {
@@ -238,7 +288,7 @@ function domainCard(d) {
       ${empty ? `<span class="pill wait">Cursus à construire</span>` : d.demo ? `<span class="pill">Démo</span>` : s.pct === 100 ? `<span class="pill ok">Terminé</span>` : ''}
     </div>
     <div><div class="dc-name">${esc(d.name)}</div><div class="dc-desc">${esc(d.description || d.goal || '')}</div></div>
-    <div class="dc-meta"><span class="pill">${icon('clock')}${fmtDuration(d.durationWeeks)}</span><span class="pill">${esc(d.level)}</span><span class="pill">${plural(s.modules, 'module')}</span></div>
+    <div class="dc-meta"><span class="pill">${icon('clock')}${PL.schedule(d).minutes} min/j</span>${!empty && PL.plan(d).end ? `<span class="pill">fin ${fmtDate(PL.plan(d).end, { day: 'numeric', month: 'short' })}</span>` : ''}<span class="pill">${esc(d.level)}</span><span class="pill">${plural(s.modules, 'module')}</span></div>
     <div><div class="dc-foot"><span>${s.lessonsDone}/${s.lessons} leçons</span><span>${s.pct}%</span></div>${bar(s.pct, d.color)}</div>
   </div>`;
 }
@@ -266,10 +316,10 @@ function domain() {
       <h1 class="h1">${esc(d.name)}</h1>
       <div class="sub">${esc(d.goal || d.description || '')}</div>
       <div class="hero-meta">
-        <span class="pill">${icon('clock')}${fmtDuration(d.durationWeeks)}</span>
+        <span class="pill">${icon('clock')}${PL.schedule(d).minutes} min · ${PL.daysLabel(PL.schedule(d).days)}</span>
         <span class="pill">${plural(s.modules, 'module')}</span>
         <span class="pill">${s.lessonsDone}/${s.lessons} leçons</span>
-        <span class="pill">${fmtMin(s.minutes)} de contenu</span>
+        <span class="pill">${fmtMin(PL.plan(d).totalMin)} au total</span>
       </div>
       ${d.source ? `<div class="source">Source : ${esc(d.source.name)}${d.source.note ? ` · ${esc(d.source.note)}` : ''}</div>` : ''}
     </div>
@@ -286,7 +336,7 @@ function domain() {
     return head + `<div class="card empty">
       <div class="em-ico">${icon('sparkle')}</div>
       <h3>Le cursus n'est pas encore construit</h3>
-      <p>Demande à Claude de générer le programme « ${esc(d.name)} » sur ${fmtDuration(d.durationWeeks)}, puis importe le fichier JSON ici. Les modules, leçons, tests et l'examen final apparaîtront automatiquement.</p>
+      <p>Demande à Claude de générer le programme « ${esc(d.name)} » sur ${fmtDuration(d.durationWeeks)}, au rythme de ${PL.schedule(d).minutes} min ${PL.daysLabel(PL.schedule(d).days)} (≈ ${fmtMin(PL.weeklyMinutes(PL.schedule(d)) * d.durationWeeks)} de travail), puis importe le fichier JSON ici. Les modules, leçons, tests et l'examen final apparaîtront automatiquement.</p>
       <button class="btn btn-primary" data-action="import-curriculum" data-id="${d.id}">${icon('upload')}Importer un cursus (.json)</button>
     </div>`;
   }
@@ -330,7 +380,7 @@ function domain() {
       ${un ? `<button class="btn ${ok ? '' : 'btn-primary'}" data-go='${JSON.stringify({ name: 'quiz', id: d.id, mi: 'exam' })}'>${ok ? 'Repasser' : "Passer l'examen"}</button>` : `<span class="pill">${icon('lock')}Termine tous les modules</span>`}
     </div>`;
   }
-  return head + `<div class="timeline">${mods}</div>${exam}`;
+  return head + planCard(d) + `<div class="timeline">${mods}</div>${exam}`;
 }
 
 function lesson() {
@@ -519,7 +569,7 @@ function progress() {
       ${state.domains.map((d) => { const s = S.domainStats(d); return `<button class="row" data-domain="${d.id}" style="width:100%;text-align:left">
         <div class="dc-icon" style="color:${d.color};width:32px;height:32px">${icon(d.icon)}</div>
         <div class="row-main"><div class="flex between"><span class="row-title">${esc(d.name)}</span><span class="row-end">${s.pct}%</span></div>
-        <div class="row-sub">${s.lessonsDone}/${s.lessons} leçons · ${plural(s.modules, 'module')} · ${fmtDuration(d.durationWeeks)}</div>${bar(s.pct, d.color)}</div></button>`; }).join('') || '<div class="dim">Aucun domaine.</div>'}
+        <div class="row-sub">${s.lessonsDone}/${s.lessons} leçons · ${plural(s.modules, 'module')} · ${PL.schedule(d).minutes} min ${PL.daysLabel(PL.schedule(d).days)}</div>${bar(s.pct, d.color)}</div></button>`; }).join('') || '<div class="dim">Aucun domaine.</div>'}
     </div></div>
     <div class="card"><div class="h2" style="margin-bottom:8px">Derniers résultats</div><div class="list">
       ${attempts.length ? attempts.map((a) => { const L = label(a.k); return `<div class="row">
@@ -590,11 +640,68 @@ function confirmModal(title, text, label, fn) {
   (m) => { $('#okBtn', m).onclick = () => { closeModal(); fn(); }; });
 }
 
+function rhythmFields(sc) {
+  return `<div class="field rhythm"><label>Ton rythme</label>
+    <div class="rh-row">
+      <div class="rh-min"><input id="rMin" type="number" min="5" max="480" step="5" value="${sc.minutes}"><span>min / jour</span></div>
+      <div class="chips" id="rChips">${[15, 25, 45, 60, 90].map((v) => `<button data-v="${v}" class="${v === sc.minutes ? 'on' : ''}">${v}</button>`).join('')}</div>
+    </div>
+    <div class="days" id="rDays">${[1, 2, 3, 4, 5, 6, 0].map((x) => `<button data-v="${x}" class="${sc.days.includes(x) ? 'on' : ''}" title="${PL.DAY_NAMES[x]}">${PL.DAY_SHORT[x]}</button>`).join('')}</div>
+    <div class="rh-sum" id="rSum"></div>
+  </div>`;
+}
+
+function bindRhythm(m, sc, extra) {
+  const sum = () => {
+    const w = PL.weeklyMinutes(sc);
+    $('#rSum', m).innerHTML = sc.days.length ? `<strong>${fmtMin(w)}</strong> par semaine · ${PL.daysLabel(sc.days)}${extra ? extra(sc) : ''}` : '<span class="warn">Choisis au moins un jour</span>';
+  };
+  $('#rMin', m).addEventListener('input', (e) => {
+    sc.minutes = Math.max(5, Math.min(480, parseInt(e.target.value, 10) || 5));
+    $('#rChips', m).querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.v === sc.minutes));
+    sum();
+  });
+  $('#rChips', m).addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    sc.minutes = +b.dataset.v; $('#rMin', m).value = sc.minutes;
+    $('#rChips', m).querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    sum();
+  });
+  $('#rDays', m).addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const v = +b.dataset.v;
+    sc.days = sc.days.includes(v) ? sc.days.filter((x) => x !== v) : [...sc.days, v];
+    b.classList.toggle('on', sc.days.includes(v));
+    sum();
+  });
+  sum();
+  return sum;
+}
+
+function rhythmModal(d) {
+  const sc = { minutes: PL.schedule(d).minutes, days: [...PL.schedule(d).days] };
+  const p = PL.plan(d);
+  openModal(`
+    <div class="modal-head"><div class="h2">Rythme · ${esc(d.name)}</div><div class="muted" style="margin-top:4px">Le planning et la date de fin seront recalculés à partir d'aujourd'hui.</div></div>
+    <div class="modal-body">${rhythmFields(sc)}</div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-close>Annuler</button><button class="btn btn-primary" id="rSave">Enregistrer</button></div>`,
+  (m) => {
+    bindRhythm(m, sc, (x) => (p.remainingMin && x.days.length ? ` · reste ${fmtMin(p.remainingMin)}, soit ~${Math.ceil(p.remainingMin / x.minutes)} séances` : ''));
+    $('#rSave', m).onclick = () => {
+      if (!sc.days.length) return toast('Choisis au moins un jour', false);
+      d.schedule = { minutes: sc.minutes, days: sc.days, target: null };
+      PL.ensureTarget(d); S.save(); closeModal();
+      toast('Rythme mis à jour'); render();
+    };
+  });
+}
+
 function newDomainModal() {
   const f = { color: COLORS[state.domains.length % COLORS.length], icon: 'book', level: 'Débutant', unit: 'mois' };
   openModal(`
     <div class="modal-head"><div class="h2">Nouveau domaine</div><div class="muted" style="margin-top:4px">Définis ce que tu veux apprendre ; le cursus sera construit ensuite.</div></div>
     <div class="modal-body">
+      ${rhythmFields(PL.DEFAULT_SCHEDULE)}
       ${catalog.length ? `<div class="field"><label>Depuis la bibliothèque</label><div class="lib">${catalog.map((c) => {
         const has = state.domains.some((d) => d.courseId === c.id);
         return `<div class="lib-item"><div class="dc-icon" style="color:${c.color}">${icon(c.icon)}</div>
@@ -613,6 +720,12 @@ function newDomainModal() {
     </div>
     <div class="modal-foot"><button class="btn btn-ghost" data-close>Annuler</button><button class="btn btn-primary" id="fCreate">Créer le domaine</button></div>`,
   (m) => {
+    const sc = { minutes: PL.DEFAULT_SCHEDULE.minutes, days: [...PL.DEFAULT_SCHEDULE.days] };
+    const durWeeks = () => { const n = Math.max(1, Math.min(52, parseInt($('#fDur', m).value, 10) || 1)); return f.unit === 'mois' ? n * 4 : n; };
+    const refresh = bindRhythm(m, sc, (x) => ` · <span class="dim">domaine personnalisé : ${fmtMin(PL.weeklyMinutes(x) * durWeeks())} au total</span>`);
+    $('#fDur', m).addEventListener('input', refresh);
+    $('#fUnit', m).addEventListener('click', () => setTimeout(refresh));
+    const okDays = () => { if (!sc.days.length) { toast('Choisis au moins un jour', false); return false; } return true; };
     const pick = (id, k) => $(id, m).addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
       $(id, m).querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
@@ -622,11 +735,13 @@ function newDomainModal() {
     if (!catalog.length) $('#fName', m).focus();
     const create = () => {
       const name = $('#fName', m).value.trim();
+      if (!okDays()) return;
       if (!name) { $('#fErr', m).hidden = false; if (!catalog.length) $('#fName', m).focus(); return; }
       const n = Math.max(1, Math.min(52, parseInt($('#fDur', m).value, 10) || 1));
       const d = {
         id: S.uid(), name, goal: $('#fGoal', m).value.trim(), description: '', color: f.color, icon: f.icon, level: f.level,
-        durationWeeks: f.unit === 'mois' ? n * 4 : n, createdAt: Date.now(), modules: [], exam: null
+        durationWeeks: f.unit === 'mois' ? n * 4 : n, createdAt: Date.now(), modules: [], exam: null,
+        schedule: { minutes: sc.minutes, days: [...sc.days], target: null }
       };
       state.domains.push(d); S.save(); closeModal();
       toast(`Domaine « ${name} » créé`);
@@ -634,9 +749,10 @@ function newDomainModal() {
     };
     $('#fCreate', m).onclick = create;
     m.querySelectorAll('[data-lib]').forEach((b) => (b.onclick = async () => {
+      if (!okDays()) return;
       b.disabled = true; b.textContent = 'Ajout…';
       try {
-        const d = await addCourse(catalog.find((c) => c.id === b.dataset.lib));
+        const d = await addCourse(catalog.find((c) => c.id === b.dataset.lib), { minutes: sc.minutes, days: [...sc.days] });
         closeModal(); toast(`« ${d.name} » ajouté`); go({ name: 'domain', id: d.id });
       } catch (e) { toast('Impossible de charger ce cours', false); b.disabled = false; b.textContent = 'Ajouter'; }
     }));
@@ -661,6 +777,7 @@ function download(name, text) {
 /* ---------------- Actions ---------------- */
 const actions = {
   'new-domain': newDomainModal,
+  'edit-rhythm': (el) => rhythmModal(S.getDomain(el.dataset.id)),
   'delete-domain': (el) => {
     const d = S.getDomain(el.dataset.id);
     confirmModal('Supprimer ce domaine ?', `« ${esc(d.name)} » et toute sa progression seront supprimés définitivement.`, 'Supprimer', () => {
@@ -803,9 +920,11 @@ async function loadCatalog() {
   try { catalog = await (await fetch('courses/index.json')).json(); } catch { catalog = []; }
 }
 
-async function addCourse(entry) {
+async function addCourse(entry, sc) {
   const course = await (await fetch(entry.file)).json();
   const d = S.domainFromCourse(course);
+  d.schedule = { ...(sc || PL.DEFAULT_SCHEDULE), days: [...(sc || PL.DEFAULT_SCHEDULE).days], target: null };
+  PL.ensureTarget(d);
   state.domains.push(d);
   S.save();
   return d;

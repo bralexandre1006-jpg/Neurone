@@ -16,6 +16,8 @@ Pour chaque demande : analyser, puis recommander un modèle avant de toucher à 
 - Cursus : générés par Claude en session (option A) au format JSON, importés par domaine (format décrit dans Paramètres)
 - Bibliothèque intégrée : `src/courses/index.json` + `src/courses/*.json` ; au 1er lancement, « Anglais débutant » est installé automatiquement
 - Anglais débutant : repris d'anglaisfacile.com (autorisation obtenue par le propriétaire du projet), scripts de conversion dans `tools/anglaisfacile/`
+- Rythme : `domain.schedule = {minutes, days[0-6], target}` ; planning calculé dans `src/js/plan.js` (leçons + bilans + examen répartis par jour, recalage auto)
+- Génération d'un cursus par Claude : dimensionner selon le budget = minutes/jour × jours/semaine × semaines (affiché dans l'état vide du domaine)
 - Questions : QCM (`choices`/`answer`) ou réponse écrite (`type: "text"`, `accept: [...]`), exercice optionnel par leçon (`exercise`)
 - Audio des leçons : champ `audio: [{title, src}]` par leçon ou `<div class="audio" data-src data-title>` dans le contenu ; fichiers dans `src/audio/<domaine>/`
 - Police : Inter variable embarquée (`src/fonts/`), aucun effet néon/halo
