@@ -488,7 +488,7 @@ svg { display: block; }
 .lesson.quiz .check { border-radius: 6px; }
 
 /* ---------- Lesson reader ---------- */
-.reader { max-width: 760px; margin: 0 auto; }
+.reader { max-width: 760px; margin: 0; }
 .prose { font-size: 15px; line-height: 1.75; color: #c9c9cd; }
 .prose h2 { color: var(--text); font-size: 19px; font-weight: 600; letter-spacing: -.015em; margin: 30px 0 10px; }
 .prose h3 { color: var(--text); font-size: 15.5px; margin: 22px 0 8px; }
