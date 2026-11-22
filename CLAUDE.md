@@ -6,13 +6,15 @@ Pour chaque demande : analyser, puis recommander un modèle avant de toucher à 
 - **Opus** : architecture, choix de stack, bugs complexes, migration de données, gros refactor.
 
 ## Fiche projet
-- Nom : Neurone
-- Stack : à définir
-- applicationId : à définir
-- Workflow GitHub Actions : à définir
-- Signature : à définir (clé hors Git, secrets GitHub Actions)
-- Convention de version : à définir
-- Emplacement des données : à définir
+- Nom : Neurone — app PC (Windows) d'apprentissage par domaines (modules, leçons, tests, examen final)
+- Stack : Tauri 2 + HTML/CSS/JS vanilla (frontend dans `src/`, shell dans `src-tauri/`)
+- Identifiant : `com.neurone.app` (ne pas changer : lié au stockage localStorage de WebView2)
+- Workflow GitHub Actions : `.github/workflows/build-windows.yml` (build à chaque push, artifact NSIS .exe + MSI, pas de Release)
+- Signature : aucune pour l'instant (installeur non signé → avertissement SmartScreen)
+- Convention de version : semver, synchronisée dans `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
+- Données : localStorage clé `neurone.v1` (domaines + progression) ; export/import JSON dans Paramètres
+- Cursus : générés par Claude en session (option A) au format JSON, importés par domaine (format décrit dans Paramètres)
+- DA : sombre, coins arrondis, pastilles fenêtre à droite (orange réduire, vert agrandir, rouge fermer)
 
 INSTRUCTIONS CLAUDE — VIBECODING D’APPS ANDROID
 

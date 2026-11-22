@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neurone</title>
+  <link rel="icon" href="favicon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar">
+      <div class="side-head" data-tauri-drag-region>
+        <div class="brand" data-tauri-drag-region>
+          <span class="brand-mark" id="brandMark"></span>
+          <span class="brand-name">Neurone</span>
+          <span class="badge">BETA</span>
+        </div>
+        <button class="icon-btn" id="collapseBtn" title="Réduire la barre latérale"></button>
+      </div>
+
+      <div class="search" id="search">
+        <span class="search-ico"></span>
+        <input id="searchInput" type="text" placeholder="Rechercher…" autocomplete="off" spellcheck="false">
+        <span class="kbd"><span>Ctrl</span><span>K</span></span>
+        <div class="search-results" id="searchResults" hidden></div>
+      </div>
+
+      <div class="side-scroll">
+        <div class="side-label"><span>Navigation</span></div>
+        <nav class="nav" id="nav"></nav>
+
+        <div class="side-label side-label-row">
+          <span>Mes domaines</span>
+          <button class="mini-btn" id="addDomainSide" title="Nouveau domaine"></button>
+        </div>
+        <div class="nav" id="domainNav"></div>
+      </div>
+
+      <div class="side-foot">
+        <div class="avatar">C</div>
+        <div class="who">
+          <div class="who-name">Camarade</div>
+          <div class="who-sub" id="streakLabel">Série : 0 jour</div>
+        </div>
+      </div>
+    </aside>
+
+    <section class="main">
+      <header class="topbar" data-tauri-drag-region>
+        <div class="crumbs" id="crumbs" data-tauri-drag-region></div>
+        <div class="win-controls">
+          <button class="dot dot-min" id="winMin" title="Réduire"><svg viewBox="0 0 10 10"><path d="M2 5h6"/></svg></button>
+          <button class="dot dot-max" id="winMax" title="Agrandir"><svg viewBox="0 0 10 10"><path d="M3 3h4v4M7 3 3 7"/></svg></button>
+          <button class="dot dot-close" id="winClose" title="Fermer"><svg viewBox="0 0 10 10"><path d="M3 3l4 4M7 3 3 7"/></svg></button>
+        </div>
+      </header>
+      <main class="view" id="view"></main>
+    </section>
+  </div>
+
+  <div class="modal-root" id="modalRoot" hidden></div>
+  <div class="toasts" id="toasts"></div>
+  <input type="file" id="fileInput" accept=".json,application/json" hidden>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
