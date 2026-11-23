@@ -99,6 +99,7 @@ function render() {
   if (html === null) return;
   $('#view').innerHTML = `<div class="view-inner">${html}</div>`;
   hydrateAudio($('#view'));
+  requestAnimationFrame(onViewScroll);
   requestAnimationFrame(() => document.querySelectorAll('[data-w]').forEach((el) => (el.style.width = el.dataset.w + '%')));
 }
 
@@ -690,7 +691,7 @@ function settings() {
         <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
       </button>
     </div>
-    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.5.0</div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.6.0</div>
   </div>`;
 }
 
@@ -779,9 +780,9 @@ function emptyBlock(ico, title, text) {
 function toast(msg, ok = true) {
   const el = document.createElement('div');
   el.className = 'toast';
-  el.innerHTML = `<span style="color:${ok ? 'var(--green)' : 'var(--red)'}">${icon(ok ? 'check' : 'info')}</span>${esc(msg)}`;
+  el.innerHTML = `<span class="toast-app"><img src="logo.png" alt=""></span><span class="toast-body"><b>Neurone</b><small>${esc(msg)}</small></span><span class="toast-state ${ok ? 'ok' : 'ko'}">${icon(ok ? 'check' : 'info')}</span>`;
   $('#toasts').appendChild(el);
-  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 220); }, 2600);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 260); }, 3200);
 }
 
 function openModal(html, onMount) {
@@ -1076,7 +1077,20 @@ $('#collapseBtn').onclick = toggleSidebar;
 $('#addDomainSide').innerHTML = icon('plus');
 $('#profileBtn').dataset.action = 'profile';
 if (window.__TAURI__) document.documentElement.classList.add('tauri');
-$('#view').addEventListener('scroll', () => $('.topbar').classList.toggle('scrolled', $('#view').scrollTop > 4), { passive: true });
+function onViewScroll() {
+  const v = $('#view'), top = v.scrollTop;
+  $('.topbar').classList.toggle('scrolled', top > 4);
+  const h1 = v.querySelector('.h1');
+  const show = !!h1 && h1.getBoundingClientRect().bottom < v.getBoundingClientRect().top + 8;
+  const bt = $('#barTitle');
+  if (show && bt.textContent !== h1.textContent) bt.textContent = h1.textContent;
+  bt.classList.toggle('on', show);
+  $('#crumbs').classList.toggle('dim-out', show);
+  const rp = $('#readProg');
+  rp.hidden = route.name !== 'lesson';
+  if (!rp.hidden) rp.firstElementChild.style.transform = `scaleX(${Math.min(1, top / Math.max(1, v.scrollHeight - v.clientHeight))})`;
+}
+$('#view').addEventListener('scroll', onViewScroll, { passive: true });
 $('#addDomainSide').dataset.action = 'new-domain';
 $('#app').classList.toggle('collapsed', !!state.settings.collapsed);
 
