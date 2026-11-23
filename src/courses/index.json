@@ -37,5 +37,16 @@
   "description": "Le guide de travail niveau avancé d'anglaisfacile.com : 58 étapes en 9 modules.",
   "lessons": 58,
   "modules": 9
+ },
+ {
+  "id": "communisme",
+  "file": "courses/communisme.json",
+  "name": "Communisme",
+  "level": "Approfondi",
+  "icon": "commu",
+  "color": "#e5484d",
+  "description": "De Marx au communisme rotatif : la Commune de Paris, l'URSS, la Chine, les expériences libertaires, Athènes, Bookchin, les zapatistes, la démocratie délibérative et la planification.",
+  "lessons": 58,
+  "modules": 12
  }
 ]

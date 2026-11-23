@@ -16,6 +16,7 @@ Pour chaque demande : analyser, puis recommander un modèle avant de toucher à 
 - Cursus : générés par Claude en session (option A) au format JSON, importés par domaine (format décrit dans Paramètres)
 - Bibliothèque intégrée : `src/courses/index.json` + `src/courses/*.json` ; au 1er lancement, « Anglais débutant » est installé automatiquement
 - Anglais : 3 niveaux (groupe `anglais`) repris d'anglaisfacile.com (autorisation obtenue par le propriétaire du projet) — Débutant (`beginners/`, build.py), Intermédiaire et Avancé (Guide de travail, `build_guide.py`) ; scripts dans `tools/anglaisfacile/`
+- Communisme : cours rédigé par Claude (point de vue communiste, faits exacts), 12 modules / 13 semaines à 25 min/j, sources dans `tools/communisme/mNN.md` + `exam.md` → `python3 tools/communisme/build.py` ; installé automatiquement une fois (`AUTO_INSTALL`) ; leçons `kind: film | lecture`
 - Niveaux : un domaine par niveau (`group`, `levelOrder`, `unlock: {prev, minAvg: 80}`) ; niveau suivant débloqué si le précédent est à 100 % et moyenne bilans + examen ≥ 80 % ; une seule entrée « Anglais » dans la barre latérale (niveau en cours)
 - Cours de la bibliothèque : contenu rechargé depuis `src/courses/*.json` à chaque lancement, NON stocké dans localStorage (`fromLibrary`) ; seule la progression est sauvegardée
 - Rythme : `domain.schedule = {minutes, days[0-6], target}` ; planning calculé dans `src/js/plan.js` (leçons + bilans + examen répartis par jour, recalage auto)

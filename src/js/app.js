@@ -413,7 +413,7 @@ function domainParcours(d) {
           const done = S.isLessonDone(d, l);
           return `<button class="lesson" ${ms.unlocked ? '' : 'disabled'} data-go='${JSON.stringify({ name: 'lesson', id: d.id, mi: i, li: j })}'>
             <span class="check ${done ? 'on' : ''}">${done ? icon('check') : ''}</span>
-            <span class="t">${esc(l.title)}</span>${exBadge(d, l)}<span class="m">${l.minutes} min</span></button>`;
+            <span class="t">${l.kind ? `<span class="kind-tag">${icon(l.kind === 'film' ? 'film' : 'book')}${l.kind === 'film' ? 'Film' : 'Lecture'}</span>` : ''}${esc(l.title)}</span>${exBadge(d, l)}<span class="m">${fmtMin(l.minutes)}</span></button>`;
         }).join('')}
         ${m.quiz ? `<button class="lesson quiz" ${ms.quizUnlocked ? '' : 'disabled'} data-go='${JSON.stringify({ name: 'quiz', id: d.id, mi: i })}'>
           <span class="check ${ms.quizPassed ? 'on' : ''}">${ms.quizPassed ? icon('check') : ''}</span>
@@ -524,7 +524,7 @@ function lesson() {
   <article class="reader">
     <div class="eyebrow">Module ${route.mi + 1} · ${esc(m.title)}</div>
     <h1 class="h1" style="font-size:28px">${esc(l.title)}</h1>
-    <div class="hero-meta" style="margin-bottom:26px"><span class="pill">${icon('clock')}${l.minutes} min</span><span class="pill">Leçon ${route.li + 1}/${m.lessons.length}</span>${l.audio?.length ? `<span class="pill">${icon('headphones')}${plural(l.audio.length, 'audio')}</span>` : ''}${done ? `<span class="pill ok">${icon('check')}Terminée</span>` : ''}</div>
+    <div class="hero-meta" style="margin-bottom:26px">${l.kind ? `<span class="pill wait">${l.kind === 'film' ? 'Film' : 'Lecture'}</span>` : ''}<span class="pill">${icon('clock')}${fmtMin(l.minutes)}</span><span class="pill">Leçon ${route.li + 1}/${m.lessons.length}</span>${l.audio?.length ? `<span class="pill">${icon('headphones')}${plural(l.audio.length, 'audio')}</span>` : ''}${done ? `<span class="pill ok">${icon('check')}Terminée</span>` : ''}</div>
     ${l.audio?.length ? `<div class="audio-list">${l.audio.map(audioSlot).join('')}</div>` : ''}
     <div class="prose">${l.content || '<p class="dim">Contenu à venir.</p>'}</div>
     ${l.exercise ? exerciseCard(d, l) : ''}
@@ -690,7 +690,7 @@ function settings() {
         <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
       </button>
     </div>
-    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.4.2</div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.5.0</div>
   </div>`;
 }
 
@@ -1132,4 +1132,19 @@ async function syncGroups() {
   }
 }
 
-loadCatalog().then(hydrate).then(seed).then(syncGroups).catch(console.error).finally(render);
+const AUTO_INSTALL = ['communisme'];
+async function autoInstall() {
+  state.autoInstalled ||= [];
+  for (const id of AUTO_INSTALL) {
+    if (state.autoInstalled.includes(id)) continue;
+    const entry = catalog.find((c) => c.id === id);
+    if (!entry) continue;
+    try {
+      if (!state.domains.some((d) => d.courseId === id)) await addCourse(entry, PL.DEFAULT_SCHEDULE);
+      state.autoInstalled.push(id);
+      S.save();
+    } catch (e) { console.error(e); }
+  }
+}
+
+loadCatalog().then(hydrate).then(seed).then(syncGroups).then(autoInstall).catch(console.error).finally(render);

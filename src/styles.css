@@ -978,3 +978,10 @@ html.tauri .main { background: var(--bg); }
 .subnav .nav-item.active { color: var(--text); }
 .subnav .nav-item .ico { width: 14px; height: 14px; }
 .app.collapsed .subnav { display: none; }
+
+.dc-icon .emblem { width: 22px; height: 22px; }
+.dc-icon.big .emblem { width: 30px; height: 30px; }
+.dom-ico .emblem { width: 16px; height: 16px; }
+.emblem { box-shadow: none; }
+.kind-tag { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; padding: 2px 6px; border-radius: 5px; font-size: 11px; font-weight: 600; color: var(--accent); background: rgba(232, 169, 78, .1); vertical-align: 1px; }
+.kind-tag .ico { width: 11px; height: 11px; }

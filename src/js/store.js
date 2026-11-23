@@ -207,6 +207,7 @@ export function normalizeCurriculum(data) {
         minutes: Number(l.minutes) || 10,
         content: String(l.content || ''),
         exercise: l.exercise ? normQuiz(l.exercise) : null,
+        kind: l.kind === 'film' || l.kind === 'lecture' ? l.kind : undefined,
         audio: Array.isArray(l.audio) ? l.audio.filter((x) => x && x.src).map((x) => ({ src: String(x.src), title: String(x.title || 'Audio') })) : []
       })),
       quiz: m.quiz ? normQuiz(m.quiz) : null

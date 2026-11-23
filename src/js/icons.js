@@ -40,16 +40,20 @@ const P = {
   back10: '<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v4h4"/><path d="M10 10v5M13 10h2v5h-2z" stroke-width="1.4"/>',
   volume: '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>',
   more: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+  film: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   headphones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>'
 };
 
-export const DOMAIN_ICONS = ['uk', 'globe', 'landmark', 'hammer', 'book', 'code', 'flask', 'calc', 'brain', 'music', 'palette', 'star', 'target', 'chart', 'sparkle', 'trophy', 'file'];
+export const DOMAIN_ICONS = ['uk', 'commu', 'globe', 'landmark', 'hammer', 'book', 'code', 'flask', 'calc', 'brain', 'music', 'palette', 'star', 'target', 'chart', 'sparkle', 'trophy', 'file'];
 
 const UK = `<svg class="flag" viewBox="0 0 60 40" aria-hidden="true"><clipPath id="ukc"><rect width="60" height="40" rx="3"/></clipPath><g clip-path="url(#ukc)"><rect width="60" height="40" fill="#012169"/><path d="M0 0l60 40M60 0L0 40" stroke="#fff" stroke-width="8"/><path d="M0 0l60 40M60 0L0 40" stroke="#C8102E" stroke-width="3"/><path d="M30 0v40M0 20h60" stroke="#fff" stroke-width="12"/><path d="M30 0v40M0 20h60" stroke="#C8102E" stroke-width="7"/></g></svg>`;
 
+const COMMU = `<svg class="flag emblem" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="5" fill="#d8262c"/><g fill="none" stroke="#ffd43b" stroke-linecap="round"><path d="M7.2 16.6A6.6 6.6 0 1 0 12.4 5.2" stroke-width="2.1"/><path d="M7.2 16.6 4.9 19.2" stroke-width="2.4"/><path d="M8.6 8.6 17.8 17.8" stroke-width="2"/><path d="M6.2 10.4 10.4 6.2" stroke-width="3.2"/></g></svg>`;
+
 export function icon(name, cls = '') {
   if (name === 'uk') return UK;
+  if (name === 'commu') return COMMU;
   return `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[name] || P.book}</svg>`;
 }
 
