@@ -121,6 +121,8 @@ for q in exam: q.pop('section', None)
 
 course = {
     'id': 'anglais-debutant',
+    'group': 'anglais',
+    'levelOrder': 1,
     'name': 'Anglais',
     'level': 'Débutant',
     'icon': 'globe',

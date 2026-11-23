@@ -6,8 +6,36 @@
   "level": "Débutant",
   "icon": "globe",
   "color": "#60a5fa",
+  "group": "anglais",
+  "levelOrder": 1,
   "description": "Le cours pour débutants d'anglaisfacile.com : 35 leçons en 7 modules, avec exercices, bilans et examen final.",
   "lessons": 37,
   "modules": 7
+ },
+ {
+  "id": "anglais-intermediaire",
+  "file": "courses/anglais-intermediaire.json",
+  "name": "Anglais",
+  "level": "Intermédiaire",
+  "icon": "globe",
+  "color": "#60a5fa",
+  "group": "anglais",
+  "levelOrder": 2,
+  "description": "Le guide de travail niveau intermédiaire d'anglaisfacile.com : 43 étapes en 7 modules.",
+  "lessons": 43,
+  "modules": 7
+ },
+ {
+  "id": "anglais-avance",
+  "file": "courses/anglais-avance.json",
+  "name": "Anglais",
+  "level": "Avancé",
+  "icon": "globe",
+  "color": "#60a5fa",
+  "group": "anglais",
+  "levelOrder": 3,
+  "description": "Le guide de travail niveau avancé d'anglaisfacile.com : 58 étapes en 9 modules.",
+  "lessons": 58,
+  "modules": 9
  }
 ]

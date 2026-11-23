@@ -32,6 +32,24 @@ function go(r) {
 
 const HOME = { name: 'home' };
 
+function currentLevel(d) {
+  const ms = S.groupMembers(d).filter(S.isUnlocked);
+  return ms.find((x) => S.domainStats(x).pct < 100) || ms[ms.length - 1] || d;
+}
+
+function visibleDomains() {
+  const seen = new Set(), out = [];
+  for (const d of state.domains) {
+    if (!d.group) { out.push(d); continue; }
+    if (seen.has(d.group)) continue;
+    seen.add(d.group);
+    out.push(currentLevel(d));
+  }
+  return out;
+}
+
+const sameGroup = (a, b) => !!a && !!b && (a.id === b.id || (!!a.group && a.group === b.group));
+
 function avatarHTML(size = 30) {
   const p = state.profile;
   const initial = esc((p.name || 'C').trim().charAt(0).toUpperCase() || 'C');
@@ -44,9 +62,10 @@ function renderSidebar() {
   const inDomain = ['domain', 'lesson', 'quiz'].includes(route.name);
   $('#nav').innerHTML = `
     <button class="nav-item ${route.name === 'home' ? 'active' : ''}" data-nav="home" title="Accueil">${icon('home')}<span class="label">Accueil</span></button>`;
+  const cur = S.getDomain(route.id);
   $('#domainNav').innerHTML = state.domains.length
-    ? state.domains.map((d) => `
-      <button class="nav-item ${inDomain && route.id === d.id ? 'active' : ''}" data-domain="${d.id}" title="${esc(d.name)}">
+    ? visibleDomains().map((d) => `
+      <button class="nav-item ${inDomain && sameGroup(cur, d) ? 'active' : ''}" data-domain="${d.id}" title="${esc(d.name)}${d.group ? ' · ' + esc(d.level) : ''}">
         <span class="dom-ico" style="color:${d.color}">${icon(d.icon)}</span><span class="label">${esc(d.name)}</span>
         <span class="pct">${S.domainStats(d).pct}%</span>
       </button>`).join('')
@@ -126,7 +145,7 @@ function home() {
     <section>
       <div class="section-title">Mes domaines</div>
       <div class="dlist">
-        ${state.domains.map(homeDomainCard).join('')}
+        ${visibleDomains().map(homeDomainCard).join('')}
         <button class="card new-row" data-action="new-domain"><span class="plus">${icon('plus')}</span><span><b>Nouveau domaine</b><small>Depuis la bibliothèque ou à construire</small></span></button>
       </div>
     </section>
@@ -172,7 +191,7 @@ function todayRows(list) {
   return { rows, plannedMin, doneMin, nextK };
 }
 
-function todayCard(list = state.domains, compact = false) {
+function todayCard(list = visibleDomains(), compact = false) {
   const { rows, plannedMin, doneMin, nextK } = todayRows(list);
   const head = `<div class="flex between"><div class="card-title" style="margin:0">${icon('calendar')}${compact ? "Aujourd'hui" : new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
     ${plannedMin ? `<span class="mono dim" style="font-size:12px">${doneMin} / ${plannedMin} min</span>` : ''}</div>`;
@@ -316,6 +335,15 @@ function domain() {
     <button class="icon-btn menu-btn" data-action="domain-menu" data-id="${d.id}" title="Options">${icon('more')}</button>
   </div>`;
 
+  const levels = d.group ? S.groupMembers(d) : [];
+  const switcher = levels.length > 1 ? `<div class="levels">${levels.map((x) => {
+    const un = S.isUnlocked(x), pct = S.domainStats(x).pct;
+    return `<button class="level ${x.id === d.id ? 'on' : ''} ${un ? '' : 'locked'}" data-go='${JSON.stringify({ name: 'domain', id: x.id })}'>
+      <span class="lv-ico">${icon(pct === 100 ? 'check' : un ? 'book' : 'lock')}</span>
+      <span class="lv-txt"><b>${esc(x.level)}</b><small>${un ? `${pct} %` : 'Verrouillé'}</small></span></button>`;
+  }).join('<span class="lv-sep"></span>')}</div>` : '';
+  if (!S.isUnlocked(d)) return head + switcher + lockedPanel(d);
+
   if (n.empty) {
     return head + `<div class="card empty">
       <div class="em-ico">${icon('sparkle')}</div>
@@ -338,7 +366,30 @@ function domain() {
 
   const tabs = `<div class="segmented" role="tablist">${TABS.map((t) => `<button class="${t.id === tab ? 'on' : ''}" data-go='${JSON.stringify({ name: 'domain', id: d.id, tab: t.id })}'>${t.label}</button>`).join('')}</div>`;
   const body = { parcours: domainParcours, planning: (x) => planCard(x), progression: domainProgress, examens: domainExams }[tab](d);
-  return head + resume + tabs + `<div class="tab-body">${body}</div>`;
+  return head + switcher + resume + tabs + `<div class="tab-body">${body}</div>`;
+}
+
+function lockedPanel(d) {
+  const prev = S.groupMembers(d).filter((x) => (x.levelOrder || 1) < (d.levelOrder || 1)).pop();
+  const min = d.unlock?.minAvg ?? 80;
+  const sc = prev ? S.levelScore(prev) : { avg: 0, complete: false };
+  const ps = prev ? S.domainStats(prev) : { pct: 0 };
+  const prevUnlocked = prev ? S.isUnlocked(prev) : false;
+  const req = (ok, title, sub) => `<div class="req ${ok ? 'ok' : ''}"><span class="check ${ok ? 'on' : ''}">${ok ? icon('check') : ''}</span><span><b>${title}</b><small>${sub}</small></span></div>`;
+  return `<div class="card locked-card">
+    <div class="lock-ico">${icon('lock')}</div>
+    <h3>Niveau ${esc(d.level)} verrouillé</h3>
+    <p class="muted">Il s'ouvre quand le niveau ${esc(prev?.level || 'précédent')} est terminé avec au moins ${min} % de réussite</p>
+    <div class="reqs">
+      ${req(sc.complete, `Terminer le niveau ${esc(prev?.level || '')}`, `Leçons, bilans et examen final · ${ps.pct} % fait`)}
+      ${req(sc.complete && sc.avg >= min, `Au moins ${min} % de moyenne`, `Moyenne des meilleurs scores aux bilans et à l'examen final · actuellement ${sc.avg} %`)}
+    </div>
+    ${prev ? `<button class="btn btn-primary btn-lg" data-go='${JSON.stringify(prevUnlocked ? (nextStep(prev).go || { name: 'domain', id: prev.id }) : { name: 'domain', id: prev.id })}'>Continuer le niveau ${esc(prev.level)}${icon('right')}</button>` : ''}
+  </div>
+  <div class="section-title" style="margin-top:24px">Au programme</div>
+  <div class="card group">${d.modules.map((m, i) => `<div class="group-row" style="cursor:default">
+    <span class="mod-num small">${String(i + 1).padStart(2, '0')}</span>
+    <span class="gr-main"><span class="gr-title">${esc(m.title)}</span><span class="gr-sub">${plural(m.lessons.length, 'étape')} · ${esc(m.summary || '')}</span></span></div>`).join('')}</div>`;
 }
 
 function domainParcours(d) {
@@ -462,6 +513,7 @@ function lesson() {
   const m = d?.modules[route.mi];
   const l = m?.lessons[route.li];
   if (!l) return (go(HOME), null);
+  if (!S.isUnlocked(d)) return (go({ name: 'domain', id: d.id }), null);
   crumbs([{ label: 'Accueil', go: HOME }, { label: d.name, go: { name: 'domain', id: d.id } }, { label: l.title }]);
   const done = S.isLessonDone(d, l);
   const flat = d.modules.flatMap((mm, mi) => mm.lessons.map((_, li) => ({ mi, li })));
@@ -520,6 +572,7 @@ function quiz() {
   const c = quizCtx();
   if (!c) return (go(S.getDomain(route.id) ? { name: 'domain', id: route.id } : HOME), null);
   const { d, q, key, title, kind } = c;
+  if (!S.isUnlocked(d)) return (go({ name: 'domain', id: d.id }), null);
   const back = kind === 'exercise' ? { name: 'lesson', id: d.id, mi: route.mi, li: route.li } : { name: 'domain', id: d.id };
   crumbs([{ label: 'Accueil', go: HOME }, { label: d.name, go: { name: 'domain', id: d.id } }, ...(kind === 'exercise' ? [{ label: c.l.title, go: back }] : []), { label: kind === 'exercise' ? 'Exercice' : title }]);
   if (!quizSession || quizSession.key !== key) quizSession = { key, answers: Array(q.questions.length).fill(null), submitted: false, pct: 0 };
@@ -548,7 +601,8 @@ function quiz() {
     let body;
     if (x.type === 'text') {
       const ok = qs.submitted && answerOk(x, qs.answers[i]);
-      body = `<input class="answer ${qs.submitted ? (ok ? 'right' : 'wrong') : ''}" data-text="${i}" value="${esc(qs.answers[i] ?? '')}" placeholder="Ta réponse…" autocomplete="off" spellcheck="false" ${qs.submitted ? 'disabled' : ''}>
+      const chips = x.words?.length && !qs.submitted ? `<div class="words">${x.words.map((w) => `<button class="word" data-word="${esc(w)}" data-for="${i}">${esc(w)}</button>`).join('')}<button class="word clear" data-clear="${i}">Effacer</button></div>` : '';
+      body = chips + `<input class="answer ${qs.submitted ? (ok ? 'right' : 'wrong') : ''}" data-text="${i}" value="${esc(qs.answers[i] ?? '')}" placeholder="Ta réponse…" autocomplete="off" spellcheck="false" ${qs.submitted ? 'disabled' : ''}>
         ${qs.submitted && !ok ? `<div class="explain">${icon('check', 'ok-ico')} ${x.accept.map(esc).join(' <span class="dim">ou</span> ')}</div>` : ''}`;
     } else {
       body = `<div class="choices ${qs.submitted ? 'locked' : ''}">
@@ -635,7 +689,7 @@ function settings() {
         <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
       </button>
     </div>
-    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.3.0</div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.4.0</div>
   </div>`;
 }
 
@@ -805,10 +859,11 @@ function newDomainModal() {
     <div class="modal-head"><div class="h2">Nouveau domaine</div><div class="muted" style="margin-top:4px">Choisis ton rythme, puis un cours de la bibliothèque ou un domaine à construire</div></div>
     <div class="modal-body">
       ${rhythmFields(PL.DEFAULT_SCHEDULE)}
-      ${catalog.length ? `<div class="field"><label>Depuis la bibliothèque</label><div class="lib">${catalog.map((c) => {
+      ${catalog.length ? `<div class="field"><label>Depuis la bibliothèque</label><div class="lib">${catalog.filter((c) => !c.group || c.levelOrder === 1).map((c) => {
+        const lv = c.group ? catalog.filter((x) => x.group === c.group) : [c];
         const has = state.domains.some((d) => d.courseId === c.id);
         return `<div class="lib-item"><div class="dc-icon" style="color:${c.color}">${icon(c.icon)}</div>
-          <div style="flex:1;min-width:0"><div class="row-title">${esc(c.name)} <span class="dim">· ${esc(c.level)}</span></div><div class="row-sub">${plural(c.modules, 'module')} · ${c.lessons} leçons</div></div>
+          <div style="flex:1;min-width:0"><div class="row-title">${esc(c.name)} <span class="dim">· ${lv.length > 1 ? lv.map((x) => esc(x.level)).join(', ') : esc(c.level)}</span></div><div class="row-sub">${lv.length > 1 ? `${lv.length} niveaux · ${lv.reduce((a, x) => a + x.lessons, 0)} leçons` : `${plural(c.modules, 'module')} · ${c.lessons} leçons`}</div></div>
           <button class="btn btn-sm" data-lib="${c.id}" ${has ? 'disabled' : ''}>${has ? 'Déjà ajouté' : 'Ajouter'}</button></div>`;
       }).join('')}</div></div><div class="or"><span>ou crée un domaine personnalisé</span></div>` : ''}
       <div class="field"><label>Nom du domaine</label><input id="fName" maxlength="40" placeholder="Ex. Anglais, Philosophie, Python…"><div class="err" id="fErr" hidden>Donne un nom à ce domaine.</div></div>
@@ -855,7 +910,10 @@ function newDomainModal() {
       if (!okDays()) return;
       b.disabled = true; b.textContent = 'Ajout…';
       try {
-        const d = await addCourse(catalog.find((c) => c.id === b.dataset.lib), { minutes: sc.minutes, days: [...sc.days] });
+        const entry = catalog.find((c) => c.id === b.dataset.lib);
+        if (entry.group) state.removedGroups = (state.removedGroups || []).filter((g) => g !== entry.group);
+        const d = await addCourse(entry, { minutes: sc.minutes, days: [...sc.days] });
+        await syncGroups();
         closeModal(); toast(`« ${d.name} » ajouté`); go({ name: 'domain', id: d.id });
       } catch (e) { toast('Impossible de charger ce cours', false); b.disabled = false; b.textContent = 'Ajouter'; }
     }));
@@ -893,7 +951,7 @@ const actions = {
   'edit-rhythm': (el) => rhythmModal(S.getDomain(el.dataset.id)),
   'delete-domain': (el) => {
     const d = S.getDomain(el.dataset.id);
-    confirmModal('Supprimer ce domaine ?', `« ${esc(d.name)} » et toute sa progression seront supprimés définitivement.`, 'Supprimer', () => {
+    confirmModal('Supprimer ce domaine ?', `« ${esc(d.name)} »${d.group ? ' (tous les niveaux)' : ''} et toute sa progression seront supprimés définitivement.`, 'Supprimer', () => {
       S.deleteDomain(d.id); toast('Domaine supprimé'); go(HOME);
     });
   },
@@ -944,6 +1002,20 @@ document.addEventListener('click', (e) => {
   if (t.closest('[data-close]') || t.id === 'modalRoot') return closeModal();
   const a = t.closest('[data-action]');
   if (a && !a.disabled) return actions[a.dataset.action]?.(a);
+  const wb = t.closest('[data-word], [data-clear]');
+  if (wb && quizSession && !quizSession.submitted) {
+    const i = wb.dataset.for ?? wb.dataset.clear;
+    const inp = document.querySelector(`[data-text="${i}"]`);
+    if (wb.dataset.clear !== undefined) {
+      inp.value = '';
+      wb.parentElement.querySelectorAll('[data-word]').forEach((b) => (b.disabled = false));
+    } else {
+      inp.value = (inp.value.trim() ? inp.value.trimEnd() + ' ' : '') + wb.dataset.word;
+      wb.disabled = true;
+    }
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
   const c = t.closest('[data-choice]');
   if (c && quizSession && !quizSession.submitted) {
     const [i, j] = c.dataset.choice.split(':').map(Number);
@@ -1008,9 +1080,9 @@ async function loadCatalog() {
 async function addCourse(entry, sc) {
   const course = await (await fetch(entry.file)).json();
   const d = S.domainFromCourse(course);
-  d.schedule = { ...(sc || PL.DEFAULT_SCHEDULE), days: [...(sc || PL.DEFAULT_SCHEDULE).days], target: null };
-  PL.ensureTarget(d);
+  d.schedule = { minutes: (sc || PL.DEFAULT_SCHEDULE).minutes, days: [...(sc || PL.DEFAULT_SCHEDULE).days], target: null };
   state.domains.push(d);
+  if (S.isUnlocked(d)) PL.ensureTarget(d);
   S.save();
   return d;
 }
@@ -1025,4 +1097,32 @@ async function seed() {
 
 initWindow();
 initTimer((d) => toast(`Objectif du jour atteint pour ${d.name} : ${d.schedule?.minutes || 25} min de travail`));
-loadCatalog().then(seed).finally(render);
+async function hydrate() {
+  for (const d of state.domains) {
+    const entry = catalog.find((c) => c.id === d.courseId);
+    if (!entry) continue;
+    try {
+      const c = await (await fetch(entry.file)).json();
+      const cur = S.normalizeCurriculum(c);
+      Object.assign(d, {
+        fromLibrary: true, group: c.group || null, levelOrder: c.levelOrder || 1, unlock: c.unlock || null,
+        level: c.level || d.level, description: c.description || d.description, goal: c.goal || d.goal, source: c.source || d.source,
+        modules: cur.modules, exam: cur.exam
+      });
+    } catch (e) { console.error(e); }
+  }
+}
+
+async function syncGroups() {
+  const removed = state.removedGroups || [];
+  const groups = [...new Set(state.domains.filter((d) => d.group).map((d) => d.group))].filter((g) => !removed.includes(g));
+  for (const g of groups) {
+    const base = S.groupMembers(state.domains.find((d) => d.group === g))[0];
+    for (const entry of catalog.filter((c) => c.group === g)) {
+      if (state.domains.some((d) => d.courseId === entry.id)) continue;
+      try { await addCourse(entry, base.schedule); } catch (e) { console.error(e); }
+    }
+  }
+}
+
+loadCatalog().then(hydrate).then(seed).then(syncGroups).catch(console.error).finally(render);

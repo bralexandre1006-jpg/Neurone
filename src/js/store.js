@@ -37,12 +37,19 @@ let saveTimer = 0;
 export function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.error(e); }
+    try { localStorage.setItem(KEY, serialize()); } catch (e) { console.error(e); }
   }, 150);
 }
 window.addEventListener('beforeunload', () => {
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+  try { localStorage.setItem(KEY, serialize()); } catch {}
 });
+
+function serialize() {
+  return JSON.stringify(state, function (k, v) {
+    if ((k === 'modules' || k === 'exam') && this && this.courseId && this.fromLibrary) return undefined;
+    return v;
+  });
+}
 
 export const uid = (p = 'd') => p + Math.random().toString(36).slice(2, 9);
 export const today = (d = new Date()) => {
@@ -150,11 +157,38 @@ export function recordAttempt(key, domainId, correct, total) {
 }
 
 export function deleteDomain(id) {
+  const target = getDomain(id);
+  const ids = target?.group ? state.domains.filter((d) => d.group === target.group).map((d) => d.id) : [id];
+  if (target?.group) (state.removedGroups ||= []).includes(target.group) || state.removedGroups.push(target.group);
+  ids.forEach((x) => deleteOne(x));
+  save();
+}
+
+function deleteOne(id) {
   state.domains = state.domains.filter((d) => d.id !== id);
   const pre = id + '/';
   for (const k of Object.keys(state.progress.lessons)) if (k.startsWith(pre)) delete state.progress.lessons[k];
   for (const k of Object.keys(state.progress.attempts)) if (k.startsWith(pre)) delete state.progress.attempts[k];
-  save();
+}
+
+export const groupMembers = (d) => (d.group ? state.domains.filter((x) => x.group === d.group).sort((a, b) => (a.levelOrder || 1) - (b.levelOrder || 1)) : [d]);
+
+export function levelScore(d) {
+  const keys = [];
+  d.modules.forEach((m) => m.quiz && keys.push(quizKey(d, m)));
+  if (d.exam) keys.push(examKey(d));
+  const best = keys.map(bestScore);
+  const avg = best.length ? Math.round(best.reduce((a, b) => a + (b ?? 0), 0) / best.length) : 0;
+  return { avg, complete: domainStats(d).pct === 100, tested: best.every((b) => b !== null) };
+}
+
+export function isUnlocked(d) {
+  if (!d.group || (d.levelOrder || 1) <= 1) return true;
+  const prev = groupMembers(d).filter((x) => (x.levelOrder || 1) < (d.levelOrder || 1)).pop();
+  if (!prev || !prev.modules.length) return false;
+  if (!isUnlocked(prev)) return false;
+  const sc = levelScore(prev);
+  return sc.complete && sc.avg >= (d.unlock?.minAvg ?? 80);
 }
 
 export function normalizeCurriculum(data) {
@@ -192,6 +226,7 @@ function normQuiz(q) {
       if (x.section) o.section = String(x.section);
       if (x.audio) o.audio = String(x.audio);
       if (x.explain) o.explain = String(x.explain);
+      if (Array.isArray(x.words) && x.words.length) o.words = x.words.map(String);
       if (x.type === 'text') {
         o.type = 'text';
         o.accept = (Array.isArray(x.accept) ? x.accept : [x.accept]).map(String).filter(Boolean);
@@ -208,7 +243,7 @@ function normQuiz(q) {
 export function domainFromCourse(c) {
   const cur = normalizeCurriculum(c);
   return {
-    id: uid(), courseId: c.id, name: c.name, description: c.description || '', goal: c.goal || '',
+    id: uid(), courseId: c.id, fromLibrary: true, group: c.group || null, levelOrder: c.levelOrder || 1, unlock: c.unlock || null, name: c.name, description: c.description || '', goal: c.goal || '',
     color: c.color || '#60a5fa', icon: c.icon || 'book', level: c.level || 'Débutant',
     durationWeeks: Number(c.durationWeeks) || 12, source: c.source || null, createdAt: Date.now(),
     modules: cur.modules, exam: cur.exam
@@ -216,7 +251,7 @@ export function domainFromCourse(c) {
 }
 
 export function exportAll() {
-  return JSON.stringify({ app: 'neurone', exportedAt: new Date().toISOString(), ...state }, null, 2);
+  return JSON.stringify({ app: 'neurone', exportedAt: new Date().toISOString(), ...JSON.parse(serialize()) }, null, 2);
 }
 
 export function importAll(text) {

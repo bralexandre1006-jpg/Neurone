@@ -929,3 +929,39 @@ html.tauri .main { background: var(--bg); }
 .prose h2 { font-weight: 700; }
 .prose h3, .q-title, .lesson-name, .who-name { font-weight: 600; }
 .ring b { font-weight: 700; }
+
+/* ---------- Niveaux ---------- */
+.levels { display: flex; align-items: center; gap: 8px; margin: -8px 0 24px; flex-wrap: wrap; }
+.level {
+  display: flex; align-items: center; gap: 10px;
+  height: 48px; padding: 0 16px 0 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  text-align: left;
+  transition: background-color .15s var(--ease), border-color .15s var(--ease);
+}
+.level:hover { border-color: rgba(237, 237, 237, .16); }
+.level.on { background: var(--raised); border-color: rgba(237, 237, 237, .2); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06); }
+.level.locked { opacity: .55; }
+.lv-ico { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: rgba(255, 255, 255, .05); color: var(--text-2); }
+.level.on .lv-ico { background: rgba(96, 165, 250, .14); color: var(--blue); }
+.lv-txt b { display: block; font-weight: 600; font-size: 13.5px; }
+.lv-txt small { display: block; font: 400 11.5px/1.2 var(--mono); color: var(--dim); }
+.lv-sep { width: 16px; height: 1px; background: var(--line-2); }
+
+.locked-card { text-align: center; padding: 40px 24px; }
+.lock-ico { width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 16px; display: grid; place-items: center; background: var(--raised); color: var(--text-2); }
+.lock-ico .ico { width: 24px; height: 24px; }
+.locked-card h3 { font-size: 20px; font-weight: 700; margin: 0 0 6px; }
+.locked-card p { margin: 0 auto 24px; max-width: 460px; font-size: 13.5px; }
+.reqs { display: grid; gap: 8px; max-width: 520px; margin: 0 auto 24px; text-align: left; }
+.req { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; background: var(--inset); border: 1px solid var(--line); }
+.req b { display: block; font-weight: 600; }
+.req small { display: block; font-size: 12.5px; color: var(--dim); }
+
+.words { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.word { height: 30px; padding: 0 12px; border-radius: 8px; background: var(--raised); border: 1px solid var(--line-2); font-size: 13.5px; transition: background-color .15s var(--ease), opacity .15s; }
+.word:hover:not(:disabled) { background: #2a2a2d; }
+.word:disabled { opacity: .3; cursor: default; }
+.word.clear { background: transparent; border-style: dashed; color: var(--muted); }

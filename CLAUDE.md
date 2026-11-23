@@ -15,7 +15,9 @@ Pour chaque demande : analyser, puis recommander un modèle avant de toucher à 
 - Données : localStorage clé `neurone.v1` (domaines + progression) ; export/import JSON dans Paramètres
 - Cursus : générés par Claude en session (option A) au format JSON, importés par domaine (format décrit dans Paramètres)
 - Bibliothèque intégrée : `src/courses/index.json` + `src/courses/*.json` ; au 1er lancement, « Anglais débutant » est installé automatiquement
-- Anglais débutant : repris d'anglaisfacile.com (autorisation obtenue par le propriétaire du projet), scripts de conversion dans `tools/anglaisfacile/`
+- Anglais : 3 niveaux (groupe `anglais`) repris d'anglaisfacile.com (autorisation obtenue par le propriétaire du projet) — Débutant (`beginners/`, build.py), Intermédiaire et Avancé (Guide de travail, `build_guide.py`) ; scripts dans `tools/anglaisfacile/`
+- Niveaux : un domaine par niveau (`group`, `levelOrder`, `unlock: {prev, minAvg: 80}`) ; niveau suivant débloqué si le précédent est à 100 % et moyenne bilans + examen ≥ 80 % ; une seule entrée « Anglais » dans la barre latérale (niveau en cours)
+- Cours de la bibliothèque : contenu rechargé depuis `src/courses/*.json` à chaque lancement, NON stocké dans localStorage (`fromLibrary`) ; seule la progression est sauvegardée
 - Rythme : `domain.schedule = {minutes, days[0-6], target}` ; planning calculé dans `src/js/plan.js` (leçons + bilans + examen répartis par jour, recalage auto)
 - Génération d'un cursus par Claude : dimensionner selon le budget = minutes/jour × jours/semaine × semaines (affiché dans l'état vide du domaine)
 - Questions : QCM (`choices`/`answer`) ou réponse écrite (`type: "text"`, `accept: [...]`), exercice optionnel par leçon (`exercise`)
