@@ -18,6 +18,7 @@ const fmtDuration = (w) => (w % 4 === 0 && w >= 8 ? plural(w / 4, 'mois').replac
 let route = { name: 'home' };
 let catalog = [];
 let quizSession = null;
+let subnavClosed = false;
 
 /* ---------------- Navigation ---------------- */
 function go(r) {
@@ -68,7 +69,7 @@ function renderSidebar() {
       <button class="nav-item ${inDomain && sameGroup(cur, d) ? 'active' : ''}" data-domain="${d.id}" title="${esc(d.name)}${d.group ? ' · ' + esc(d.level) : ''}">
         <span class="dom-ico" style="color:${d.color}">${icon(d.icon)}</span><span class="label">${esc(d.name)}</span>
         <span class="pct">${S.domainStats(d).pct}%</span>
-      </button>${inDomain && sameGroup(cur, d) && cur.modules.length ? `<div class="subnav">${TABS.map((t) => `<button class="nav-item ${route.name === 'domain' && (route.tab || 'parcours') === t.id ? 'active' : ''}" data-go='${JSON.stringify({ name: 'domain', id: cur.id, tab: t.id })}'>${icon(t.ico)}<span class="label">${t.label}</span></button>`).join('')}</div>` : ''}`).join('')
+      </button>${inDomain && sameGroup(cur, d) && cur.modules.length && !subnavClosed ? `<div class="subnav">${TABS.map((t) => `<button class="nav-item ${route.name === 'domain' && (route.tab || 'parcours') === t.id ? 'active' : ''}" data-go='${JSON.stringify({ name: 'domain', id: cur.id, tab: t.id })}'>${icon(t.ico)}<span class="label">${t.label}</span></button>`).join('')}</div>` : ''}`).join('')
     : `<button class="nav-item" data-action="new-domain">${icon('plus')}<span class="label">Ajouter un domaine</span></button>`;
   $('#navBottom').innerHTML = `
     <button class="nav-item ${route.name === 'settings' ? 'active' : ''}" data-nav="settings" title="Paramètres">${icon('settings')}<span class="label">Paramètres</span></button>`;
@@ -689,7 +690,7 @@ function settings() {
         <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
       </button>
     </div>
-    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.4.1</div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.4.2</div>
   </div>`;
 }
 
@@ -1030,7 +1031,13 @@ document.addEventListener('click', (e) => {
   const n = t.closest('[data-nav]');
   if (n) return go({ name: n.dataset.nav });
   const dm = t.closest('[data-domain]');
-  if (dm) return go({ name: 'domain', id: dm.dataset.domain });
+  if (dm) {
+    const target = S.getDomain(dm.dataset.domain);
+    const here = ['domain', 'lesson', 'quiz'].includes(route.name) && sameGroup(S.getDomain(route.id), target);
+    if (here && dm.closest('#domainNav')) { subnavClosed = !subnavClosed; return renderSidebar(); }
+    subnavClosed = false;
+    return go({ name: 'domain', id: dm.dataset.domain });
+  }
 });
 
 document.addEventListener('input', (e) => {
