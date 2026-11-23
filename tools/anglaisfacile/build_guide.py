@@ -181,7 +181,7 @@ order = {'intermediaire': 2, 'avance': 3}[LEVEL]
 n_less = sum(len(m['lessons']) for m in modules)
 course = {
     'id': course_id, 'group': 'anglais', 'levelOrder': order,
-    'name': 'Anglais', 'level': level_name, 'icon': 'globe', 'color': '#60a5fa',
+    'name': 'Anglais', 'level': level_name, 'icon': 'uk', 'color': '#60a5fa',
     'durationWeeks': len(modules) * 2,
     'description': f"Le guide de travail niveau {level_name.lower()} d'anglaisfacile.com : {n_less} étapes en {len(modules)} modules.",
     'goal': {'intermediaire': "Consolider la grammaire et l'anglais pratique du quotidien : goûts, regrets, durées, courrier, travail, voyages.",

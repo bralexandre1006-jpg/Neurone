@@ -125,7 +125,7 @@ course = {
     'levelOrder': 1,
     'name': 'Anglais',
     'level': 'Débutant',
-    'icon': 'globe',
+    'icon': 'uk',
     'color': '#60a5fa',
     'durationWeeks': 14,
     'description': "Le cours pour débutants d'anglaisfacile.com : 35 leçons en 7 modules, avec exercices, bilans et examen final.",

@@ -42,7 +42,8 @@
   --r-md: 8px;
   --r-sm: 6px;
   --font: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", sans-serif;
-  --mono: "SF Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  --mono: var(--font);
+  --code: "SF Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
   --ease: cubic-bezier(.22, 1, .36, 1);
   color-scheme: dark;
 }
@@ -55,7 +56,8 @@ body {
   color: var(--text);
   font: 13.5px/1.5 var(--font);
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: "cv11", "ss01", "ss03";
+  font-feature-settings: "cv11", "ss01", "ss03", "tnum";
+  font-variant-numeric: tabular-nums;
   overflow: hidden;
   user-select: none;
 }
@@ -262,8 +264,6 @@ svg { display: block; }
   box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .35);
   transition: transform .15s var(--ease), filter .15s;
 }
-.dot svg { width: 8px; height: 8px; fill: none; stroke: rgba(0, 0, 0, .65); stroke-width: 1.5; stroke-linecap: round; opacity: 0; transition: opacity .12s; }
-.win-controls:hover .dot svg { opacity: 1; }
 .dot:hover { filter: brightness(1.1); }
 .dot:active { transform: scale(.88); }
 .dot-min { background: #febc2e; }
@@ -874,7 +874,7 @@ html.tauri .main { background: var(--bg); }
 .settings { max-width: 720px; display: grid; gap: 0; }
 .settings .section-title { margin-top: 24px; }
 .settings .section-title:first-child { margin-top: 0; }
-.code { margin: 0; font: 11.5px/1.6 var(--mono); color: var(--text-2); background: var(--inset); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow: auto; }
+.code { margin: 0; font: 11.5px/1.6 var(--code); color: var(--text-2); background: var(--inset); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow: auto; }
 
 .profile-edit { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .avatar-xl { position: relative; width: 96px; height: 96px; border-radius: 50%; overflow: hidden; background: #b4282b; display: grid; place-items: center; font-size: 36px; font-weight: 600; color: #fff; }
@@ -965,3 +965,16 @@ html.tauri .main { background: var(--bg); }
 .word:hover:not(:disabled) { background: #2a2a2d; }
 .word:disabled { opacity: .3; cursor: default; }
 .word.clear { background: transparent; border-style: dashed; color: var(--muted); }
+
+/* ---------- v0.4.1 ---------- */
+.prose { font-variant-numeric: normal; font-feature-settings: "cv11", "ss01", "ss03"; }
+.flag { display: block; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .12); }
+.dc-icon .flag { width: 22px; height: 15px; }
+.dc-icon.big .flag { width: 32px; height: 22px; border-radius: 4px; }
+.dom-ico .flag { width: 16px; height: 11px; border-radius: 2px; }
+.dom-ico:has(.flag) { background: transparent; }
+.subnav { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 6px 20px; padding-left: 12px; border-left: 1px solid var(--line-2); animation: rise .2s var(--ease); }
+.subnav .nav-item { height: 30px; font-size: 13px; color: var(--muted); }
+.subnav .nav-item.active { color: var(--text); }
+.subnav .nav-item .ico { width: 14px; height: 14px; }
+.app.collapsed .subnav { display: none; }

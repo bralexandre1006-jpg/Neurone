@@ -44,9 +44,12 @@ const P = {
   headphones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>'
 };
 
-export const DOMAIN_ICONS = ['globe', 'landmark', 'hammer', 'book', 'code', 'flask', 'calc', 'brain', 'music', 'palette', 'star', 'target', 'chart', 'sparkle', 'trophy', 'file'];
+export const DOMAIN_ICONS = ['uk', 'globe', 'landmark', 'hammer', 'book', 'code', 'flask', 'calc', 'brain', 'music', 'palette', 'star', 'target', 'chart', 'sparkle', 'trophy', 'file'];
+
+const UK = `<svg class="flag" viewBox="0 0 60 40" aria-hidden="true"><clipPath id="ukc"><rect width="60" height="40" rx="3"/></clipPath><g clip-path="url(#ukc)"><rect width="60" height="40" fill="#012169"/><path d="M0 0l60 40M60 0L0 40" stroke="#fff" stroke-width="8"/><path d="M0 0l60 40M60 0L0 40" stroke="#C8102E" stroke-width="3"/><path d="M30 0v40M0 20h60" stroke="#fff" stroke-width="12"/><path d="M30 0v40M0 20h60" stroke="#C8102E" stroke-width="7"/></g></svg>`;
 
 export function icon(name, cls = '') {
+  if (name === 'uk') return UK;
   return `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[name] || P.book}</svg>`;
 }
 
