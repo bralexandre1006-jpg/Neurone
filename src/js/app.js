@@ -795,7 +795,7 @@ function settings() {
         <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
       </button>
     </div>
-    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.7.1</div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.7.2</div>
   </div>`;
 }
 

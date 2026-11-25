@@ -25,7 +25,7 @@ Pour chaque demande : analyser, puis recommander un modèle avant de toucher à 
 - Audio des leçons : champ `audio: [{title, src}]` par leçon ou `<div class="audio" data-src data-title>` dans le contenu ; fichiers dans `src/audio/<domaine>/`
 - Police : Inter variable embarquée (`src/fonts/`), titres en gras (700), aucun effet néon/halo
 - Minuteur : supprimé (v0.7.0) ; temps d'étude estimé (durée des leçons + tests) dans `progress.log`
-- Leçon cochée automatiquement quand son exercice est réussi ; choix des QCM mélangés à chaque tentative
+- Leçon cochée automatiquement quand son exercice est réussi (seuil des exercices : 80 %, `EXERCISE_PASS`) ; choix des QCM mélangés à chaque tentative
 - Rappel : page `recall`, 10 questions aléatoires tirées des exercices des leçons terminées et des bilans réussis
 - Œuvres : `works` + `worksQuiz` dans le JSON du cours (Communisme : `tools/communisme/works.md`), onglet « Œuvres » ; bilans durcis dans `tools/communisme/bilans.md`
 - DA : sombre (fond #0b0b0c), style macOS (barre latérale translucide Mica, contrôles segmentés, listes groupées), passe unslop, accent ambre = « aujourd'hui », pastilles fenêtre à droite (orange réduire, vert agrandir, rouge fermer)

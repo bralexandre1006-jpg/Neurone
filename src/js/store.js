@@ -1,6 +1,7 @@
 
 const KEY = 'neurone.v1';
 export const PASS_DEFAULT = 70;
+export const EXERCISE_PASS = 80;
 
 function blank() {
   return {
@@ -208,7 +209,7 @@ export function normalizeCurriculum(data) {
         title: String(l.title || `Leçon ${j + 1}`),
         minutes: Number(l.minutes) || 10,
         content: String(l.content || ''),
-        exercise: l.exercise ? normQuiz(l.exercise) : null,
+        exercise: l.exercise ? { ...normQuiz(l.exercise), passScore: Math.max(EXERCISE_PASS, Number(l.exercise.passScore) || 0) } : null,
         kind: l.kind === 'film' || l.kind === 'lecture' ? l.kind : undefined,
         audio: Array.isArray(l.audio) ? l.audio.filter((x) => x && x.src).map((x) => ({ src: String(x.src), title: String(x.title || 'Audio') })) : []
       })),
