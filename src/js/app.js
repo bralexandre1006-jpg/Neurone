@@ -795,7 +795,7 @@ function settings() {
         <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
       </button>
     </div>
-    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.7.0</div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.7.1</div>
   </div>`;
 }
 
@@ -1285,4 +1285,17 @@ async function autoInstall() {
   }
 }
 
-loadCatalog().then(hydrate).then(seed).then(syncGroups).then(autoInstall).catch(console.error).finally(render);
+function syncPassedExercises() {
+  let changed = false;
+  state.domains.forEach((d) => d.modules.forEach((m) => m.lessons.forEach((l) => {
+    if (!l.exercise || S.isLessonDone(d, l)) return;
+    const best = S.bestScore(S.exerciseKey(d, l));
+    if (best !== null && best >= S.passScore(l.exercise)) {
+      state.progress.lessons[S.lessonKey(d, l)] = Date.now();
+      changed = true;
+    }
+  })));
+  if (changed) S.save();
+}
+
+loadCatalog().then(hydrate).then(seed).then(syncGroups).then(autoInstall).then(syncPassedExercises).catch(console.error).finally(render);
