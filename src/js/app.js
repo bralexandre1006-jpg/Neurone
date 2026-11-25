@@ -20,11 +20,26 @@ let quizSession = null;
 let subnavClosed = false;
 let recallSet = null;
 let recallScope = 'all';
+let recallNext = null;
+
+function recallDoneToday() {
+  const k = S.today();
+  return (state.progress.recalls || []).some((x) => S.today(new Date(x.date)) === k);
+}
+function needsRecall() {
+  return !recallDoneToday() && recallPool('all').length > 0;
+}
 
 /* ---------------- Navigation ---------------- */
 function go(r) {
   if (r.name === 'domains' || r.name === 'overview' || r.name === 'progress' || r.name === 'exams') r = { name: 'home' };
   if (r.name === 'recall') recallSet = recallSet && r.keep ? recallSet : null;
+  if ((r.name === 'lesson' || (r.name === 'quiz' && r.mi !== 'recall')) && needsRecall()) {
+    recallNext = r;
+    toast('Commence par le rappel du jour, Camarade', false);
+    r = { name: 'recall' };
+  }
+  else if (r.name !== 'recall' && !(r.name === 'quiz' && r.mi === 'recall')) recallNext = null;
   route = r;
   stopAudio();
   closeMenu();
@@ -602,7 +617,7 @@ function quiz() {
       <div class="muted" style="margin-top:6px">${qs.pct >= pass ? okMsg : 'Relis les corrections ci-dessous puis retente ta chance'}</div>
       <div class="flex" style="justify-content:center;margin-top:18px">
         <button class="btn" data-action="retry-quiz">${icon('refresh')}Recommencer</button>
-        <button class="btn btn-primary" data-go='${JSON.stringify(back)}'>${{ exercise: 'Retour à la leçon', recall: 'Retour au rappel', works: 'Retour aux œuvres' }[kind] || 'Retour au domaine'}</button>
+        <button class="btn btn-primary" data-go='${JSON.stringify(kind === 'recall' && recallNext ? recallNext : back)}'>${kind === 'recall' && recallNext ? 'Continuer ma séance' : { exercise: 'Retour à la leçon', recall: 'Retour au rappel', works: 'Retour aux œuvres' }[kind] || 'Retour au domaine'}</button>
       </div>
     </div>${kind === 'recall' ? recallReview(q, qs) : ''}` : '';
 
@@ -700,6 +715,9 @@ function recall() {
   return `
   <div class="page-head"><div><h1 class="h1">Rappel</h1>
     <div class="sub">Dix questions tirées au hasard dans ce que tu as déjà vu, différentes à chaque lancement</div></div></div>
+  ${pool.length || recallPool('all').length ? `<div class="card gate ${recallDoneToday() ? 'ok' : ''}">${recallDoneToday()
+    ? `${icon('check')}<span><b>Rappel du jour fait</b><small>Tes leçons et tests sont accessibles pour aujourd'hui</small></span>`
+    : `${icon('lock')}<span><b>Rappel du jour obligatoire</b><small>Un rappel par jour avant de reprendre tes leçons et tes tests${recallNext ? ', puis tu retrouveras ce que tu voulais ouvrir' : ''}</small></span>`}</div>` : ''}
   <div class="segmented" style="margin-bottom:20px">${scopes.map((x) => `<button class="${x.id === recallScope ? 'on' : ''}" data-action="recall-scope" data-scope="${esc(x.id)}">${esc(x.label)}</button>`).join('')}</div>
   <div class="card recall-hero">
     <div class="recall-ico">${icon('brain')}</div>
