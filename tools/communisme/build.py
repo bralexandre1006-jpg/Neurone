@@ -130,7 +130,11 @@ if os.path.exists(wp):
     for blk in re.split(r'^## ', main, flags=re.M)[1:]:
         head, _, body = blk.partition('\n')
         t, wid, title, author, year, length = [x.strip() for x in head.split('|')]
-        works.append({'type': t, 'id': wid, 'title': title, 'author': author, 'year': year, 'length': length, 'why': ' '.join(body.split())})
+        why, _, ctrl_w = body.partition('### CTRL')
+        w = {'type': t, 'id': wid, 'title': title, 'author': author, 'year': year, 'length': length, 'why': ' '.join(why.split())}
+        if ctrl_w.strip():
+            w['quiz'] = {'title': f'Contrôle : {title}', 'passScore': 80, 'questions': questions(ctrl_w.split('\n'))}
+        works.append(w)
     works_quiz = {'title': 'Contrôle des œuvres', 'passScore': 70, 'questions': questions(ctrl.split('\n'))}
 for i, m in enumerate(mods):
     m['week'] = i + 1

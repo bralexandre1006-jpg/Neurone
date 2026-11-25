@@ -575,6 +575,10 @@ const RECALL_D = { id: 'recall', name: 'Rappel', color: 'var(--accent)', modules
 function quizCtx() {
   if (route.mi === 'recall') return recallSet ? { d: RECALL_D, q: recallSet.q, key: 'recall:' + recallSet.id, title: 'Rappel', kind: 'recall' } : null;
   const d = S.getDomain(route.id);
+  if (d && route.mi === 'work') {
+    const w = d.works?.find((x) => x.id === route.w);
+    return w?.quiz ? { d, w, q: w.quiz, key: `${d.id}/work/${w.id}`, title: w.quiz.title, kind: 'work' } : null;
+  }
   if (d && route.mi === 'works') return d.worksQuiz ? { d, q: d.worksQuiz, key: `${d.id}/works`, title: 'Contrôle des œuvres', kind: 'works' } : null;
   if (!d) return null;
   if (route.mi === 'exam') return d.exam ? { d, q: d.exam, key: S.examKey(d), title: 'Examen final', kind: 'exam' } : null;
@@ -598,7 +602,7 @@ function quiz() {
   if (!c) return (go(route.mi === 'recall' ? { name: 'recall' } : S.getDomain(route.id) ? { name: 'domain', id: route.id } : HOME), null);
   const { d, q, key, title, kind } = c;
   if (!S.isUnlocked(d)) return (go({ name: 'domain', id: d.id }), null);
-  const back = kind === 'exercise' ? { name: 'lesson', id: d.id, mi: route.mi, li: route.li } : kind === 'recall' ? { name: 'recall' } : kind === 'works' ? { name: 'domain', id: d.id, tab: 'oeuvres' } : { name: 'domain', id: d.id };
+  const back = kind === 'exercise' ? { name: 'lesson', id: d.id, mi: route.mi, li: route.li } : kind === 'recall' ? { name: 'recall' } : kind === 'works' || kind === 'work' ? { name: 'domain', id: d.id, tab: 'oeuvres' } : { name: 'domain', id: d.id };
   if (kind === 'recall') crumbs([{ label: 'Rappel', go: { name: 'recall' } }, { label: 'Questions' }]);
   else crumbs([{ label: 'Accueil', go: HOME }, { label: d.name, go: { name: 'domain', id: d.id } }, ...(kind === 'exercise' ? [{ label: c.l.title, go: back }] : []), { label: kind === 'exercise' ? 'Exercice' : title }]);
   if (!quizSession || quizSession.key !== key) {
@@ -607,7 +611,7 @@ function quiz() {
   }
   const qs = quizSession;
   const pass = S.passScore(q);
-  const okMsg = { exam: 'Domaine validé. Gloire au travailleur studieux, Camarade', quiz: 'Module validé, le suivant est débloqué', exercise: 'Leçon validée, elle est cochée automatiquement', recall: 'Bonne mémoire, Camarade', works: 'Tu connais tes classiques, Camarade' }[kind];
+  const okMsg = { exam: 'Domaine validé. Gloire au travailleur studieux, Camarade', quiz: 'Module validé, le suivant est débloqué', exercise: 'Leçon validée, elle est cochée automatiquement', recall: 'Bonne mémoire, Camarade', works: 'Tu connais tes classiques, Camarade', work: 'Œuvre maîtrisée, Camarade' }[kind];
 
   const result = qs.submitted ? `
     <div class="card result">
@@ -617,7 +621,7 @@ function quiz() {
       <div class="muted" style="margin-top:6px">${qs.pct >= pass ? okMsg : 'Relis les corrections ci-dessous puis retente ta chance'}</div>
       <div class="flex" style="justify-content:center;margin-top:18px">
         <button class="btn" data-action="retry-quiz">${icon('refresh')}Recommencer</button>
-        <button class="btn btn-primary" data-go='${JSON.stringify(kind === 'recall' && recallNext ? recallNext : back)}'>${kind === 'recall' && recallNext ? 'Continuer ma séance' : { exercise: 'Retour à la leçon', recall: 'Retour au rappel', works: 'Retour aux œuvres' }[kind] || 'Retour au domaine'}</button>
+        <button class="btn btn-primary" data-go='${JSON.stringify(kind === 'recall' && recallNext ? recallNext : back)}'>${kind === 'recall' && recallNext ? 'Continuer ma séance' : { exercise: 'Retour à la leçon', recall: 'Retour au rappel', works: 'Retour aux œuvres', work: 'Retour aux œuvres' }[kind] || 'Retour au domaine'}</button>
       </div>
     </div>${kind === 'recall' ? recallReview(q, qs) : ''}` : '';
 
@@ -742,18 +746,22 @@ function domainWorks(d) {
     return `<div class="section-title flex between"><span>${title}</span><span class="dim" style="font-weight:400">${n}/${list.length} ${type === 'film' ? 'vus' : 'lus'}</span></div>
     <div class="card group works">${list.map((w) => `
       <div class="group-row work ${seen[k(w)] ? 'seen' : ''}">
-        <button class="check ${seen[k(w)] ? 'on' : ''}" data-action="toggle-work" data-key="${k(w)}" title="${type === 'film' ? 'Marquer comme vu' : 'Marquer comme lu'}">${seen[k(w)] ? icon('check') : ''}</button>
+        <button class="check ${seen[k(w)] ? 'on' : ''}" data-action="toggle-work" data-key="${k(w)}" data-d="${d.id}" data-w="${w.id}" title="${type === 'film' ? 'Marquer comme vu' : 'Marquer comme lu'}">${seen[k(w)] ? icon('check') : ''}</button>
         <span class="gr-main"><span class="gr-title">${esc(w.title)} <span class="dim" style="font-weight:400">· ${esc(w.author)}, ${esc(String(w.year))}</span></span>
         <span class="work-why">${esc(w.why)}</span></span>
-        <span class="mono dim" style="font-size:12.5px;white-space:nowrap">${esc(w.length || '')}</span>
+        <span class="work-side">
+          <span class="mono dim" style="font-size:12.5px;white-space:nowrap">${esc(w.length || '')}</span>
+          ${w.quiz ? (() => { const b = S.bestScore(`${d.id}/work/${w.id}`); return `<button class="btn btn-sm" data-go='${JSON.stringify({ name: 'quiz', id: d.id, mi: 'work', w: w.id })}'>${b === null ? 'Contrôle' : `<span class="${b >= S.passScore(w.quiz) ? 'up' : 'ko-t'}">${b} %</span>`}</button>`; })() : ''}
+        </span>
       </div>`).join('')}</div>`;
   };
   const best = d.worksQuiz ? S.bestScore(`${d.id}/works`) : null;
+  const allSeen = d.works.every((w) => seen[k(w)]);
   return `${section('film', 'Films à voir')}<div style="height:20px"></div>${section('livre', 'Livres à lire')}
   ${d.worksQuiz ? `<div class="card exam-row" style="margin-top:20px">
     <div class="flex" style="gap:16px"><span class="mod-num ${best !== null && best >= S.passScore(d.worksQuiz) ? 'done' : ''}">${icon('trophy')}</span>
-    <div><div class="mod-title">Contrôle des œuvres</div><div class="mod-sub">${d.worksQuiz.questions.length} questions sur les films et les livres${best !== null ? ` · meilleur score ${best} %` : ''}</div></div></div>
-    <button class="btn btn-primary" data-go='${JSON.stringify({ name: 'quiz', id: d.id, mi: 'works' })}'>${best !== null ? 'Repasser' : 'Passer le contrôle'}</button>
+    <div><div class="mod-title">Contrôle final des œuvres</div><div class="mod-sub">${d.worksQuiz.questions.length} questions mêlant films et livres${best !== null ? ` · meilleur score ${best} %` : ''}</div></div></div>
+    ${allSeen ? `<button class="btn btn-primary" data-go='${JSON.stringify({ name: 'quiz', id: d.id, mi: 'works' })}'>${best !== null ? 'Repasser' : 'Passer le contrôle final'}</button>` : `<span class="dim flex" style="font-size:12.5px">${icon('lock')}Coche toutes les œuvres</span>`}
   </div>` : ''}`;
 }
 
@@ -813,7 +821,7 @@ function settings() {
         <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
       </button>
     </div>
-    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.7.2</div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.8.0</div>
   </div>`;
 }
 
@@ -1129,8 +1137,16 @@ const actions = {
   'toggle-work': (el) => {
     const k = el.dataset.key;
     state.progress.works ||= {};
-    if (state.progress.works[k]) delete state.progress.works[k]; else state.progress.works[k] = Date.now();
+    const adding = !state.progress.works[k];
+    if (adding) state.progress.works[k] = Date.now(); else delete state.progress.works[k];
     S.save(); const top = $('#view').scrollTop; render(); $('#view').scrollTop = top;
+    const d = S.getDomain(el.dataset.d), w = d?.works?.find((x) => x.id === el.dataset.w);
+    if (adding && w?.quiz && S.bestScore(`${d.id}/work/${w.id}`) === null) {
+      openModal(`<div class="modal-head"><div class="h2">${esc(w.title)}</div><div class="muted" style="margin-top:4px">${w.type === 'film' ? 'Vu' : 'Lu'} ! Tu veux vérifier ce que tu en as retenu ?</div></div>
+        <div class="modal-body"><div class="muted">Un contrôle de ${w.quiz.questions.length} questions sur ${w.type === 'film' ? 'le film' : 'le livre'}, réussi à partir de ${S.passScore(w.quiz)} %</div></div>
+        <div class="modal-foot"><button class="btn btn-ghost" data-close>Plus tard</button><button class="btn btn-primary" id="wGo">Passer le contrôle</button></div>`,
+      (m) => { $('#wGo', m).onclick = () => { closeModal(); go({ name: 'quiz', id: d.id, mi: 'work', w: w.id }); }; });
+    }
   },
   export: () => { download(`neurone-sauvegarde-${S.today()}.json`, S.exportAll()); toast('Sauvegarde exportée'); },
   'import-all': () => pickFile((text) => confirmModal('Restaurer cette sauvegarde ?', 'Tes données actuelles seront remplacées par celles du fichier.', 'Restaurer', () => {
