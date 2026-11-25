@@ -22,22 +22,34 @@ let recallSet = null;
 let recallScope = 'all';
 let recallNext = null;
 
-function recallDoneToday() {
+const scopeOf = (d) => (d ? d.group || d.id : 'all');
+function recallDoneToday(scope = 'all') {
   const k = S.today();
-  return (state.progress.recalls || []).some((x) => S.today(new Date(x.date)) === k);
+  return (state.progress.recalls || []).some((x) => S.today(new Date(x.date)) === k && (scope === 'all' || x.scope === scope));
 }
-function needsRecall() {
-  return !recallDoneToday() && recallPool('all').length > 0;
+function needsRecall(d) {
+  if (!d) return false;
+  const sc = scopeOf(d);
+  return !recallDoneToday(sc) && recallPool(sc).length > 0;
+}
+function buildRecall(scope) {
+  const pool = recallPool(scope);
+  if (!pool.length) return false;
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  recallSet = { id: Date.now(), scope, q: { passScore: 70, questions: pool.slice(0, 10) } };
+  quizSession = null;
+  return true;
 }
 
 /* ---------------- Navigation ---------------- */
 function go(r) {
   if (r.name === 'domains' || r.name === 'overview' || r.name === 'progress' || r.name === 'exams') r = { name: 'home' };
   if (r.name === 'recall') recallSet = recallSet && r.keep ? recallSet : null;
-  if ((r.name === 'lesson' || (r.name === 'quiz' && r.mi !== 'recall')) && needsRecall()) {
+  const gd = (r.name === 'lesson' || (r.name === 'quiz' && r.mi !== 'recall')) ? S.getDomain(r.id) : null;
+  if (gd && needsRecall(gd) && buildRecall(scopeOf(gd))) {
     recallNext = r;
-    toast('Commence par le rappel du jour, Camarade', false);
-    r = { name: 'recall' };
+    recallScope = scopeOf(gd);
+    r = { name: 'quiz', mi: 'recall' };
   }
   else if (r.name !== 'recall' && !(r.name === 'quiz' && r.mi === 'recall')) recallNext = null;
   route = r;
@@ -656,7 +668,10 @@ function quiz() {
   }).join('');
 
   const answered = qs.answers.filter((a) => a !== null && a !== '').length;
-  const intro = q.intro ? `<div class="note-card prose">${q.intro}</div>` : '';
+  const scopeName = (sc) => (sc === 'all' ? 'tous domaines' : (state.domains.find((x) => scopeOf(x) === sc)?.name || ''));
+  const intro = kind === 'recall' && recallNext && !qs.submitted
+    ? `<div class="card gate">${icon('lock')}<span><b>Rappel ${esc(scopeName(recallSet?.scope))} du jour</b><small>Réponds puis clique « Valider mes réponses » pour continuer ta séance. Une seule fois par jour pour ce domaine</small></span></div>`
+    : q.intro ? `<div class="note-card prose">${q.intro}</div>` : '';
   return `
   <div class="reader">
     <div class="eyebrow"><span style="color:${d.color}">●</span> ${esc(d.name)}</div>
@@ -719,9 +734,9 @@ function recall() {
   return `
   <div class="page-head"><div><h1 class="h1">Rappel</h1>
     <div class="sub">Dix questions tirées au hasard dans ce que tu as déjà vu, différentes à chaque lancement</div></div></div>
-  ${pool.length || recallPool('all').length ? `<div class="card gate ${recallDoneToday() ? 'ok' : ''}">${recallDoneToday()
-    ? `${icon('check')}<span><b>Rappel du jour fait</b><small>Tes leçons et tests sont accessibles pour aujourd'hui</small></span>`
-    : `${icon('lock')}<span><b>Rappel du jour obligatoire</b><small>Un rappel par jour avant de reprendre tes leçons et tes tests${recallNext ? ', puis tu retrouveras ce que tu voulais ouvrir' : ''}</small></span>`}</div>` : ''}
+  <div class="card group" style="margin-bottom:20px">${scopes.filter((x) => x.id !== 'all' && recallPool(x.id).length).map((x) => `
+    <div class="group-row" style="cursor:default"><span class="gr-main"><span class="gr-title">${esc(x.label)}</span><span class="gr-sub">${recallDoneToday(x.id) ? 'Rappel du jour fait, leçons débloquées' : 'Rappel demandé à ta première leçon du jour'}</span></span>
+    <span class="pill ${recallDoneToday(x.id) ? 'ok' : 'wait'}">${recallDoneToday(x.id) ? 'Fait' : 'À faire'}</span></div>`).join('') || '<div class="group-row" style="cursor:default"><span class="gr-sub">Termine une leçon pour débloquer les rappels</span></div>'}</div>
   <div class="segmented" style="margin-bottom:20px">${scopes.map((x) => `<button class="${x.id === recallScope ? 'on' : ''}" data-action="recall-scope" data-scope="${esc(x.id)}">${esc(x.label)}</button>`).join('')}</div>
   <div class="card recall-hero">
     <div class="recall-ico">${icon('brain')}</div>
@@ -821,7 +836,7 @@ function settings() {
         <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
       </button>
     </div>
-    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.8.0</div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.8.1</div>
   </div>`;
 }
 
@@ -1114,7 +1129,7 @@ const actions = {
     qs.correct = c.q.questions.filter((x, i) => answerOk(x, qs.answers[i])).length;
     if (c.kind === 'recall') {
       qs.pct = Math.round((qs.correct / c.q.questions.length) * 100);
-      (state.progress.recalls ||= []).push({ date: Date.now(), pct: qs.pct, n: c.q.questions.length });
+      (state.progress.recalls ||= []).push({ date: Date.now(), pct: qs.pct, n: c.q.questions.length, scope: recallSet?.scope || 'all' });
       S.save();
     } else {
       qs.pct = S.recordAttempt(qs.key, c.d.id, qs.correct, c.q.questions.length);
@@ -1126,11 +1141,7 @@ const actions = {
   },
   'retry-quiz': () => { if (route.mi === 'recall') return actions['start-recall'](); quizSession = null; render(); $('#view').scrollTop = 0; },
   'start-recall': () => {
-    const pool = recallPool(recallScope);
-    if (!pool.length) return toast('Termine au moins une leçon pour lancer un rappel', false);
-    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-    recallSet = { id: Date.now(), q: { passScore: 70, questions: pool.slice(0, 10) } };
-    quizSession = null;
+    if (!buildRecall(recallScope)) return toast('Termine au moins une leçon pour lancer un rappel', false);
     go({ name: 'quiz', mi: 'recall' });
   },
   'recall-scope': (el) => { recallScope = el.dataset.scope; render(); },
