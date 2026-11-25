@@ -3,7 +3,6 @@ import * as S from './store.js';
 import { initWindow } from './window.js';
 import { audioSlot, audioSay, hydrateAudio, stopAudio } from './audio.js';
 import * as PL from './plan.js';
-import { initTimer, setContext, finish as finishTimer } from './timer.js';
 
 const { state } = S;
 const $ = (s, r = document) => r.querySelector(s);
@@ -19,10 +18,13 @@ let route = { name: 'home' };
 let catalog = [];
 let quizSession = null;
 let subnavClosed = false;
+let recallSet = null;
+let recallScope = 'all';
 
 /* ---------------- Navigation ---------------- */
 function go(r) {
   if (r.name === 'domains' || r.name === 'overview' || r.name === 'progress' || r.name === 'exams') r = { name: 'home' };
+  if (r.name === 'recall') recallSet = recallSet && r.keep ? recallSet : null;
   route = r;
   stopAudio();
   closeMenu();
@@ -62,14 +64,15 @@ function avatarHTML(size = 30) {
 function renderSidebar() {
   const inDomain = ['domain', 'lesson', 'quiz'].includes(route.name);
   $('#nav').innerHTML = `
-    <button class="nav-item ${route.name === 'home' ? 'active' : ''}" data-nav="home" title="Accueil">${icon('home')}<span class="label">Accueil</span></button>`;
+    <button class="nav-item ${route.name === 'home' ? 'active' : ''}" data-nav="home" title="Accueil">${icon('home')}<span class="label">Accueil</span></button>
+    <button class="nav-item ${route.name === 'recall' || route.mi === 'recall' ? 'active' : ''}" data-nav="recall" title="Rappel">${icon('brain')}<span class="label">Rappel</span></button>`;
   const cur = S.getDomain(route.id);
   $('#domainNav').innerHTML = state.domains.length
     ? visibleDomains().map((d) => `
       <button class="nav-item ${inDomain && sameGroup(cur, d) ? 'active' : ''}" data-domain="${d.id}" title="${esc(d.name)}${d.group ? ' · ' + esc(d.level) : ''}">
         <span class="dom-ico" style="color:${d.color}">${icon(d.icon)}</span><span class="label">${esc(d.name)}</span>
         <span class="pct">${S.domainStats(d).pct}%</span>
-      </button>${inDomain && sameGroup(cur, d) && cur.modules.length && !subnavClosed ? `<div class="subnav">${TABS.map((t) => `<button class="nav-item ${route.name === 'domain' && (route.tab || 'parcours') === t.id ? 'active' : ''}" data-go='${JSON.stringify({ name: 'domain', id: cur.id, tab: t.id })}'>${icon(t.ico)}<span class="label">${t.label}</span></button>`).join('')}</div>` : ''}`).join('')
+      </button>${inDomain && sameGroup(cur, d) && cur.modules.length && !subnavClosed ? `<div class="subnav">${tabsFor(cur).map((t) => `<button class="nav-item ${route.name === 'domain' && (route.tab || 'parcours') === t.id ? 'active' : ''}" data-go='${JSON.stringify({ name: 'domain', id: cur.id, tab: t.id })}'>${icon(t.ico)}<span class="label">${t.label}</span></button>`).join('')}</div>` : ''}`).join('')
     : `<button class="nav-item" data-action="new-domain">${icon('plus')}<span class="label">Ajouter un domaine</span></button>`;
   $('#navBottom').innerHTML = `
     <button class="nav-item ${route.name === 'settings' ? 'active' : ''}" data-nav="settings" title="Paramètres">${icon('settings')}<span class="label">Paramètres</span></button>`;
@@ -91,9 +94,8 @@ function crumbs(items) {
 /* ---------------- Views ---------------- */
 function render() {
   PL.resetCache();
-  setContext(route);
   renderSidebar();
-  const views = { home, domain, lesson, quiz, settings };
+  const views = { home, domain, lesson, quiz, settings, recall };
   const fn = views[route.name] || home;
   const html = fn();
   if (html === null) return;
@@ -315,13 +317,15 @@ const TABS = [
   { id: 'parcours', label: 'Parcours', ico: 'book' },
   { id: 'planning', label: 'Planning', ico: 'calendar' },
   { id: 'progression', label: 'Progression', ico: 'chart' },
-  { id: 'examens', label: 'Examens', ico: 'exam' }
+  { id: 'examens', label: 'Examens', ico: 'exam' },
+  { id: 'oeuvres', label: 'Œuvres', ico: 'film' }
 ];
+const tabsFor = (d) => TABS.filter((t) => t.id !== 'oeuvres' || d.works?.length);
 
 function domain() {
   const d = S.getDomain(route.id);
   if (!d) return (go(HOME), null);
-  const tab = TABS.some((t) => t.id === route.tab) ? route.tab : 'parcours';
+  const tab = tabsFor(d).some((t) => t.id === route.tab) ? route.tab : 'parcours';
   crumbs([{ label: 'Accueil', go: HOME }, { label: d.name }]);
   const s = S.domainStats(d);
   const n = nextStep(d);
@@ -366,8 +370,8 @@ function domain() {
     <div class="card resume-today">${todayCard([d], true)}</div>
   </div>`;
 
-  const tabs = `<div class="segmented" role="tablist">${TABS.map((t) => `<button class="${t.id === tab ? 'on' : ''}" data-go='${JSON.stringify({ name: 'domain', id: d.id, tab: t.id })}'>${t.label}</button>`).join('')}</div>`;
-  const body = { parcours: domainParcours, planning: (x) => planCard(x), progression: domainProgress, examens: domainExams }[tab](d);
+  const tabs = `<div class="segmented" role="tablist">${tabsFor(d).map((t) => `<button class="${t.id === tab ? 'on' : ''}" data-go='${JSON.stringify({ name: 'domain', id: d.id, tab: t.id })}'>${t.label}</button>`).join('')}</div>`;
+  const body = { parcours: domainParcours, planning: (x) => planCard(x), progression: domainProgress, examens: domainExams, oeuvres: domainWorks }[tab](d);
   return head + switcher + resume + tabs + `<div class="tab-body">${body}</div>`;
 }
 
@@ -551,8 +555,12 @@ function exerciseCard(d, l) {
   </div>`;
 }
 
+const RECALL_D = { id: 'recall', name: 'Rappel', color: 'var(--accent)', modules: [] };
+
 function quizCtx() {
+  if (route.mi === 'recall') return recallSet ? { d: RECALL_D, q: recallSet.q, key: 'recall:' + recallSet.id, title: 'Rappel', kind: 'recall' } : null;
   const d = S.getDomain(route.id);
+  if (d && route.mi === 'works') return d.worksQuiz ? { d, q: d.worksQuiz, key: `${d.id}/works`, title: 'Contrôle des œuvres', kind: 'works' } : null;
   if (!d) return null;
   if (route.mi === 'exam') return d.exam ? { d, q: d.exam, key: S.examKey(d), title: 'Examen final', kind: 'exam' } : null;
   const m = d.modules[route.mi];
@@ -572,15 +580,19 @@ function answerOk(x, a) {
 
 function quiz() {
   const c = quizCtx();
-  if (!c) return (go(S.getDomain(route.id) ? { name: 'domain', id: route.id } : HOME), null);
+  if (!c) return (go(route.mi === 'recall' ? { name: 'recall' } : S.getDomain(route.id) ? { name: 'domain', id: route.id } : HOME), null);
   const { d, q, key, title, kind } = c;
   if (!S.isUnlocked(d)) return (go({ name: 'domain', id: d.id }), null);
-  const back = kind === 'exercise' ? { name: 'lesson', id: d.id, mi: route.mi, li: route.li } : { name: 'domain', id: d.id };
-  crumbs([{ label: 'Accueil', go: HOME }, { label: d.name, go: { name: 'domain', id: d.id } }, ...(kind === 'exercise' ? [{ label: c.l.title, go: back }] : []), { label: kind === 'exercise' ? 'Exercice' : title }]);
-  if (!quizSession || quizSession.key !== key) quizSession = { key, answers: Array(q.questions.length).fill(null), submitted: false, pct: 0 };
+  const back = kind === 'exercise' ? { name: 'lesson', id: d.id, mi: route.mi, li: route.li } : kind === 'recall' ? { name: 'recall' } : kind === 'works' ? { name: 'domain', id: d.id, tab: 'oeuvres' } : { name: 'domain', id: d.id };
+  if (kind === 'recall') crumbs([{ label: 'Rappel', go: { name: 'recall' } }, { label: 'Questions' }]);
+  else crumbs([{ label: 'Accueil', go: HOME }, { label: d.name, go: { name: 'domain', id: d.id } }, ...(kind === 'exercise' ? [{ label: c.l.title, go: back }] : []), { label: kind === 'exercise' ? 'Exercice' : title }]);
+  if (!quizSession || quizSession.key !== key) {
+    const shuffle = (n) => { const a = [...Array(n).keys()]; for (let i = n - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    quizSession = { key, answers: Array(q.questions.length).fill(null), orders: q.questions.map((x) => (x.choices ? shuffle(x.choices.length) : null)), submitted: false, pct: 0 };
+  }
   const qs = quizSession;
   const pass = S.passScore(q);
-  const okMsg = { exam: 'Domaine validé. Gloire au travailleur studieux, Camarade', quiz: 'Module validé, le suivant est débloqué', exercise: 'La leçon est acquise' }[kind];
+  const okMsg = { exam: 'Domaine validé. Gloire au travailleur studieux, Camarade', quiz: 'Module validé, le suivant est débloqué', exercise: 'Leçon validée, elle est cochée automatiquement', recall: 'Bonne mémoire, Camarade', works: 'Tu connais tes classiques, Camarade' }[kind];
 
   const result = qs.submitted ? `
     <div class="card result">
@@ -590,9 +602,9 @@ function quiz() {
       <div class="muted" style="margin-top:6px">${qs.pct >= pass ? okMsg : 'Relis les corrections ci-dessous puis retente ta chance'}</div>
       <div class="flex" style="justify-content:center;margin-top:18px">
         <button class="btn" data-action="retry-quiz">${icon('refresh')}Recommencer</button>
-        <button class="btn btn-primary" data-go='${JSON.stringify(back)}'>${kind === 'exercise' ? 'Retour à la leçon' : 'Retour au domaine'}</button>
+        <button class="btn btn-primary" data-go='${JSON.stringify(back)}'>${{ exercise: 'Retour à la leçon', recall: 'Retour au rappel', works: 'Retour aux œuvres' }[kind] || 'Retour au domaine'}</button>
       </div>
-    </div>` : '';
+    </div>${kind === 'recall' ? recallReview(q, qs) : ''}` : '';
 
   let lastSection = null;
   const items = q.questions.map((x, i) => {
@@ -608,7 +620,8 @@ function quiz() {
         ${qs.submitted && !ok ? `<div class="explain">${icon('check', 'ok-ico')} ${x.accept.map(esc).join(' <span class="dim">ou</span> ')}</div>` : ''}`;
     } else {
       body = `<div class="choices ${qs.submitted ? 'locked' : ''}">
-        ${x.choices.map((ch, j) => {
+        ${(qs.orders?.[i] || x.choices.map((_, j) => j)).map((j) => {
+          const ch = x.choices[j];
           let cls = qs.answers[i] === j ? 'sel' : '';
           if (qs.submitted) cls = j === x.answer ? 'right' : qs.answers[i] === j ? 'wrong' : '';
           return `<button class="choice ${cls}" data-choice="${i}:${j}"><span class="radio"></span>${esc(ch)}</button>`;
@@ -616,6 +629,7 @@ function quiz() {
       </div>`;
     }
     return `${sec}<div class="card q">
+      ${x.src ? `<div class="q-src">${esc(x.src.domain)} · ${esc(x.src.title)}</div>` : ''}
       <div class="q-title"><span class="n">${String(i + 1).padStart(2, '0')}</span><span class="q-text">${prompt}</span>${say}</div>
       ${body}
       ${qs.submitted && x.explain ? `<div class="explain">${icon('info', 'dim')} ${esc(x.explain)}</div>` : ''}
@@ -628,11 +642,101 @@ function quiz() {
   <div class="reader">
     <div class="eyebrow"><span style="color:${d.color}">●</span> ${esc(d.name)}</div>
     <h1 class="h1" style="font-size:28px">${esc(title)}</h1>
-    <div class="sub" style="margin-bottom:22px">${q.questions.length} questions · réussite à ${pass} %${S.bestScore(key) !== null ? ` · meilleur score ${S.bestScore(key)} %` : ''}</div>
+    <div class="sub" style="margin-bottom:22px">${q.questions.length} questions · réussite à ${pass} %${kind !== 'recall' && S.bestScore(key) !== null ? ` · meilleur score ${S.bestScore(key)} %` : ''}</div>
     ${result}${intro}${items}
     ${qs.submitted ? '' : `<div class="quiz-bar"><span class="muted mono" style="font-size:12px" id="answeredCount">${answered}/${q.questions.length} répondues</span>
       <button class="btn btn-primary" data-action="submit-quiz" ${answered === q.questions.length ? '' : 'disabled'}>Valider mes réponses</button></div>`}
   </div>`;
+}
+
+function domainLabel(d) { return d.group ? `${d.name} · ${d.level}` : d.name; }
+
+function recallPool(scope) {
+  const out = [];
+  state.domains.forEach((d) => {
+    if (!d.modules.length || !S.isUnlocked(d)) return;
+    if (scope !== 'all' && (d.group || d.id) !== scope) return;
+    d.modules.forEach((m, mi) => {
+      m.lessons.forEach((l, li) => {
+        if (!S.isLessonDone(d, l) || !l.exercise) return;
+        l.exercise.questions.forEach((x) => {
+          const rest = { ...x };
+          out.push({ ...rest, src: { domain: domainLabel(d), title: l.title, go: { name: 'lesson', id: d.id, mi, li } } });
+        });
+      });
+      if (m.quiz && S.isPassed(S.quizKey(d, m), m.quiz)) {
+        m.quiz.questions.forEach((x) => {
+          const { section, ...rest } = x;
+          out.push({ ...rest, src: { domain: domainLabel(d), title: m.quiz.title || m.title, go: { name: 'domain', id: d.id } } });
+        });
+      }
+    });
+  });
+  return out;
+}
+
+function recallReview(q, qs) {
+  const wrong = q.questions.map((x, i) => ({ x, ok: answerOk(x, qs.answers[i]) })).filter((r) => !r.ok);
+  if (!wrong.length) return `<div class="card note-card" style="margin-bottom:16px">Aucune erreur : tout est bien ancré, Camarade</div>`;
+  const seen = new Set();
+  const rows = wrong.filter((r) => { const k = r.x.src.title; if (seen.has(k)) return false; seen.add(k); return true; });
+  return `<div class="section-title">À revoir</div><div class="card group" style="margin-bottom:24px">${rows.map((r) => `
+    <button class="group-row" data-go='${JSON.stringify(r.x.src.go)}'>
+      <span class="gr-ico" style="background:var(--raised);color:var(--accent)">${icon('book')}</span>
+      <span class="gr-main"><span class="gr-title">${esc(r.x.src.title)}</span><span class="gr-sub">${esc(r.x.src.domain)}</span></span>
+      <span class="dim">${icon('chevron')}</span>
+    </button>`).join('')}</div>`;
+}
+
+function recall() {
+  crumbs([{ label: 'Rappel' }]);
+  const scopes = [{ id: 'all', label: 'Tout' }];
+  const seen = new Set();
+  state.domains.forEach((d) => { const k = d.group || d.id; if (!d.modules.length || seen.has(k)) return; seen.add(k); scopes.push({ id: k, label: d.name, d }); });
+  if (!scopes.some((x) => x.id === recallScope)) recallScope = 'all';
+  const pool = recallPool(recallScope);
+  const lessons = new Set(pool.map((x) => x.src.title)).size;
+  const hist = (state.progress.recalls || []).slice(-6).reverse();
+  return `
+  <div class="page-head"><div><h1 class="h1">Rappel</h1>
+    <div class="sub">Dix questions tirées au hasard dans ce que tu as déjà vu, différentes à chaque lancement</div></div></div>
+  <div class="segmented" style="margin-bottom:20px">${scopes.map((x) => `<button class="${x.id === recallScope ? 'on' : ''}" data-action="recall-scope" data-scope="${esc(x.id)}">${esc(x.label)}</button>`).join('')}</div>
+  <div class="card recall-hero">
+    <div class="recall-ico">${icon('brain')}</div>
+    <div style="flex:1;min-width:0">
+      <div class="resume-title" style="margin:0 0 4px">${pool.length ? `${Math.min(10, pool.length)} questions prêtes` : 'Rien à réviser pour l\'instant'}</div>
+      <div class="muted">${pool.length ? `Tirées parmi ${pool.length} questions de ${plural(lessons, 'leçon')} et bilans déjà faits` : 'Termine au moins une leçon avec exercice pour débloquer le rappel'}</div>
+    </div>
+    <button class="btn btn-primary btn-lg" data-action="start-recall" ${pool.length ? '' : 'disabled'}>Lancer un rappel${icon('right')}</button>
+  </div>
+  ${hist.length ? `<div class="section-title" style="margin-top:24px">Derniers rappels</div><div class="card group">${hist.map((h) => `
+    <div class="group-row" style="cursor:default"><span class="gr-main"><span class="gr-title">${new Date(h.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span><span class="gr-sub">${h.n} questions</span></span>
+    <span class="pill ${h.pct >= 70 ? 'ok' : 'ko'}">${h.pct} %</span></div>`).join('')}</div>` : ''}`;
+}
+
+function domainWorks(d) {
+  const seen = state.progress.works || {};
+  const k = (w) => `${d.id}/${w.id}`;
+  const section = (type, title) => {
+    const list = d.works.filter((w) => w.type === type);
+    if (!list.length) return '';
+    const n = list.filter((w) => seen[k(w)]).length;
+    return `<div class="section-title flex between"><span>${title}</span><span class="dim" style="font-weight:400">${n}/${list.length} ${type === 'film' ? 'vus' : 'lus'}</span></div>
+    <div class="card group works">${list.map((w) => `
+      <div class="group-row work ${seen[k(w)] ? 'seen' : ''}">
+        <button class="check ${seen[k(w)] ? 'on' : ''}" data-action="toggle-work" data-key="${k(w)}" title="${type === 'film' ? 'Marquer comme vu' : 'Marquer comme lu'}">${seen[k(w)] ? icon('check') : ''}</button>
+        <span class="gr-main"><span class="gr-title">${esc(w.title)} <span class="dim" style="font-weight:400">· ${esc(w.author)}, ${esc(String(w.year))}</span></span>
+        <span class="work-why">${esc(w.why)}</span></span>
+        <span class="mono dim" style="font-size:12.5px;white-space:nowrap">${esc(w.length || '')}</span>
+      </div>`).join('')}</div>`;
+  };
+  const best = d.worksQuiz ? S.bestScore(`${d.id}/works`) : null;
+  return `${section('film', 'Films à voir')}<div style="height:20px"></div>${section('livre', 'Livres à lire')}
+  ${d.worksQuiz ? `<div class="card exam-row" style="margin-top:20px">
+    <div class="flex" style="gap:16px"><span class="mod-num ${best !== null && best >= S.passScore(d.worksQuiz) ? 'done' : ''}">${icon('trophy')}</span>
+    <div><div class="mod-title">Contrôle des œuvres</div><div class="mod-sub">${d.worksQuiz.questions.length} questions sur les films et les livres${best !== null ? ` · meilleur score ${best} %` : ''}</div></div></div>
+    <button class="btn btn-primary" data-go='${JSON.stringify({ name: 'quiz', id: d.id, mi: 'works' })}'>${best !== null ? 'Repasser' : 'Passer le contrôle'}</button>
+  </div>` : ''}`;
 }
 
 function settings() {
@@ -691,7 +795,7 @@ function settings() {
         <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
       </button>
     </div>
-    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.6.0</div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.7.0</div>
   </div>`;
 }
 
@@ -967,7 +1071,7 @@ const actions = {
     const d = S.getDomain(route.id), l = d.modules[route.mi].lessons[route.li];
     const was = S.isLessonDone(d, l);
     S.setLessonDone(d, l, !was);
-    if (!was) { toast('Leçon terminée'); finishTimer(); }
+    if (!was) toast('Leçon terminée');
     render();
   },
   'next-lesson': (el) => {
@@ -982,13 +1086,34 @@ const actions = {
     if (!c) return;
     const qs = quizSession;
     qs.correct = c.q.questions.filter((x, i) => answerOk(x, qs.answers[i])).length;
-    qs.pct = S.recordAttempt(qs.key, c.d.id, qs.correct, c.q.questions.length);
+    if (c.kind === 'recall') {
+      qs.pct = Math.round((qs.correct / c.q.questions.length) * 100);
+      (state.progress.recalls ||= []).push({ date: Date.now(), pct: qs.pct, n: c.q.questions.length });
+      S.save();
+    } else {
+      qs.pct = S.recordAttempt(qs.key, c.d.id, qs.correct, c.q.questions.length);
+    }
+    if (c.kind === 'exercise' && qs.pct >= S.passScore(c.q) && !S.isLessonDone(c.d, c.l)) S.setLessonDone(c.d, c.l, true);
     qs.submitted = true;
-    finishTimer();
     render();
     $('#view').scrollTo({ top: 0, behavior: 'smooth' });
   },
-  'retry-quiz': () => { quizSession = null; render(); $('#view').scrollTop = 0; },
+  'retry-quiz': () => { if (route.mi === 'recall') return actions['start-recall'](); quizSession = null; render(); $('#view').scrollTop = 0; },
+  'start-recall': () => {
+    const pool = recallPool(recallScope);
+    if (!pool.length) return toast('Termine au moins une leçon pour lancer un rappel', false);
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    recallSet = { id: Date.now(), q: { passScore: 70, questions: pool.slice(0, 10) } };
+    quizSession = null;
+    go({ name: 'quiz', mi: 'recall' });
+  },
+  'recall-scope': (el) => { recallScope = el.dataset.scope; render(); },
+  'toggle-work': (el) => {
+    const k = el.dataset.key;
+    state.progress.works ||= {};
+    if (state.progress.works[k]) delete state.progress.works[k]; else state.progress.works[k] = Date.now();
+    S.save(); const top = $('#view').scrollTop; render(); $('#view').scrollTop = top;
+  },
   export: () => { download(`neurone-sauvegarde-${S.today()}.json`, S.exportAll()); toast('Sauvegarde exportée'); },
   'import-all': () => pickFile((text) => confirmModal('Restaurer cette sauvegarde ?', 'Tes données actuelles seront remplacées par celles du fichier.', 'Restaurer', () => {
     try { S.importAll(text); toast('Sauvegarde restaurée'); go(HOME); } catch (e) { toast(e.message, false); }
@@ -1117,7 +1242,6 @@ async function seed() {
 }
 
 initWindow();
-initTimer((d) => toast(`Objectif du jour atteint pour ${d.name} : ${d.schedule?.minutes || 25} min de travail`));
 async function hydrate() {
   for (const d of state.domains) {
     const entry = catalog.find((c) => c.id === d.courseId);
@@ -1127,8 +1251,8 @@ async function hydrate() {
       const cur = S.normalizeCurriculum(c);
       Object.assign(d, {
         fromLibrary: true, group: c.group || null, levelOrder: c.levelOrder || 1, unlock: c.unlock || null,
-        level: c.level || d.level, icon: c.icon || d.icon, description: c.description || d.description, goal: c.goal || d.goal, source: c.source || d.source,
-        modules: cur.modules, exam: cur.exam
+        level: c.level || d.level, icon: c.icon || d.icon, description: c.description || d.description, goal: c.goal || d.goal, source: c.source || null,
+        modules: cur.modules, exam: cur.exam, works: cur.works, worksQuiz: cur.worksQuiz
       });
     } catch (e) { console.error(e); }
   }

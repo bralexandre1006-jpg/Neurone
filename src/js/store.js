@@ -143,6 +143,7 @@ export function setLessonDone(d, l, done) {
   const k = lessonKey(d, l);
   if (done && !state.progress.lessons[k]) {
     state.progress.lessons[k] = Date.now();
+    logStudy(d.id, l.minutes || 10);
   } else if (!done) {
     delete state.progress.lessons[k];
   }
@@ -152,6 +153,7 @@ export function setLessonDone(d, l, done) {
 export function recordAttempt(key, domainId, correct, total) {
   const pct = Math.round((correct / total) * 100);
   (state.progress.attempts[key] ||= []).push({ pct, correct, total, date: Date.now() });
+  logStudy(domainId, Math.max(3, Math.round(total * 0.75)));
   save();
   return pct;
 }
@@ -213,7 +215,7 @@ export function normalizeCurriculum(data) {
       quiz: m.quiz ? normQuiz(m.quiz) : null
     };
   });
-  return { modules, exam: src.exam ? normQuiz(src.exam) : null };
+  return { modules, exam: src.exam ? normQuiz(src.exam) : null, works: Array.isArray(src.works) ? src.works : null, worksQuiz: src.worksQuiz ? normQuiz(src.worksQuiz) : null };
 }
 
 function normQuiz(q) {
@@ -247,7 +249,7 @@ export function domainFromCourse(c) {
     id: uid(), courseId: c.id, fromLibrary: true, group: c.group || null, levelOrder: c.levelOrder || 1, unlock: c.unlock || null, name: c.name, description: c.description || '', goal: c.goal || '',
     color: c.color || '#60a5fa', icon: c.icon || 'book', level: c.level || 'Débutant',
     durationWeeks: Number(c.durationWeeks) || 12, source: c.source || null, createdAt: Date.now(),
-    modules: cur.modules, exam: cur.exam
+    modules: cur.modules, exam: cur.exam, works: cur.works, worksQuiz: cur.worksQuiz
   };
 }
 

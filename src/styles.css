@@ -1106,3 +1106,12 @@ html[data-primary="blue"] .btn-primary:hover { background: #2f95ff; border-color
 :focus-visible { outline: 2px solid rgba(10, 132, 255, .8); outline-offset: 2px; border-radius: 6px; }
 .view-inner { animation: viewIn .28s var(--ease); }
 @keyframes viewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.q-src { font-size: 12.5px; color: var(--accent); margin: -4px 0 8px; }
+.recall-hero { display: flex; align-items: center; gap: 20px; padding: 24px; }
+.recall-ico { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; background: rgba(232, 169, 78, .12); color: var(--accent); flex: none; }
+.recall-ico .ico { width: 26px; height: 26px; }
+.work { align-items: flex-start; padding-top: 14px; padding-bottom: 14px; }
+.work .check { margin-top: 2px; cursor: pointer; }
+.work-why { display: block; font-size: 13.5px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.work.seen .gr-title { color: var(--muted); }

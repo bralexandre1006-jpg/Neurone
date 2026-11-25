@@ -24,7 +24,10 @@ Pour chaque demande : analyser, puis recommander un modèle avant de toucher à 
 - Questions : QCM (`choices`/`answer`) ou réponse écrite (`type: "text"`, `accept: [...]`), exercice optionnel par leçon (`exercise`)
 - Audio des leçons : champ `audio: [{title, src}]` par leçon ou `<div class="audio" data-src data-title>` dans le contenu ; fichiers dans `src/audio/<domaine>/`
 - Police : Inter variable embarquée (`src/fonts/`), titres en gras (700), aucun effet néon/halo
-- Minuteur : `src/js/timer.js`, tourne dans les leçons/exercices/tests, pause à la fin d'une leçon, sonne à l'objectif du domaine ; temps réel enregistré dans `progress.log` (minutes, décimales)
+- Minuteur : supprimé (v0.7.0) ; temps d'étude estimé (durée des leçons + tests) dans `progress.log`
+- Leçon cochée automatiquement quand son exercice est réussi ; choix des QCM mélangés à chaque tentative
+- Rappel : page `recall`, 10 questions aléatoires tirées des exercices des leçons terminées et des bilans réussis
+- Œuvres : `works` + `worksQuiz` dans le JSON du cours (Communisme : `tools/communisme/works.md`), onglet « Œuvres » ; bilans durcis dans `tools/communisme/bilans.md`
 - DA : sombre (fond #0b0b0c), style macOS (barre latérale translucide Mica, contrôles segmentés, listes groupées), passe unslop, accent ambre = « aujourd'hui », pastilles fenêtre à droite (orange réduire, vert agrandir, rouge fermer)
 - Navigation : Accueil (domaines + séance du jour) → espace domaine (onglets Parcours / Planning / Progression / Examens) ; profil (nom + photo en dataURL dans `state.profile`) via le bas de la barre latérale
 

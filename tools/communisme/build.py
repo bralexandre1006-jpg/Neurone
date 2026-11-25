@@ -114,6 +114,24 @@ def parse(path):
 
 
 mods = [parse(p) for p in sorted(glob.glob(os.path.join(HERE, 'm[0-9][0-9].md')))]
+bil_path = os.path.join(HERE, 'bilans.md')
+if os.path.exists(bil_path):
+    secs = re.split(r'^# (m\d+)\s*$', open(bil_path, encoding='utf-8').read(), flags=re.M)
+    over = {secs[i]: questions(secs[i + 1].split('\n')) for i in range(1, len(secs), 2)}
+    for m in mods:
+        if m['id'] in over:
+            m['quiz']['questions'] = over[m['id']]
+
+works, works_quiz = [], None
+wp = os.path.join(HERE, 'works.md')
+if os.path.exists(wp):
+    txt = open(wp, encoding='utf-8').read()
+    main, _, ctrl = txt.partition('### CONTROLE')
+    for blk in re.split(r'^## ', main, flags=re.M)[1:]:
+        head, _, body = blk.partition('\n')
+        t, wid, title, author, year, length = [x.strip() for x in head.split('|')]
+        works.append({'type': t, 'id': wid, 'title': title, 'author': author, 'year': year, 'length': length, 'why': ' '.join(body.split())})
+    works_quiz = {'title': 'Contrôle des œuvres', 'passScore': 70, 'questions': questions(ctrl.split('\n'))}
 for i, m in enumerate(mods):
     m['week'] = i + 1
 exam_path = os.path.join(HERE, 'exam.md')
@@ -124,9 +142,10 @@ course = {
     'durationWeeks': 13,
     'description': "De Marx au communisme rotatif : la Commune de Paris, l'URSS, la Chine, les expériences libertaires, Athènes, Bookchin, les zapatistes, la démocratie délibérative et la planification.",
     'goal': "Maîtriser toutes les sources et les contre-exemples du communisme rotatif, et savoir défendre ou critiquer le modèle avec des faits.",
-    'source': {'name': 'Cours rédigé par Claude', 'note': 'Sources : historiographie de référence, citées dans chaque leçon'},
     'modules': mods,
     'exam': exam,
+    'works': works,
+    'worksQuiz': works_quiz,
 }
 json.dump(course, open(OUT, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
 total = sum(l['minutes'] for m in mods for l in m['lessons'])
