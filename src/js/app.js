@@ -724,20 +724,20 @@ function recallReview(q, qs) {
 
 function recall() {
   crumbs([{ label: 'Rappel' }]);
-  const scopes = [{ id: 'all', label: 'Tout' }];
+  const scopes = [];
   const seen = new Set();
   state.domains.forEach((d) => { const k = d.group || d.id; if (!d.modules.length || seen.has(k)) return; seen.add(k); scopes.push({ id: k, label: d.name, d }); });
-  if (!scopes.some((x) => x.id === recallScope)) recallScope = 'all';
+  if (!scopes.some((x) => x.id === recallScope)) recallScope = (scopes.find((x) => recallPool(x.id).length) || scopes[0] || { id: 'all' }).id;
   const pool = recallPool(recallScope);
   const lessons = new Set(pool.map((x) => x.src.title)).size;
   const hist = (state.progress.recalls || []).slice(-6).reverse();
   return `
   <div class="page-head"><div><h1 class="h1">Rappel</h1>
     <div class="sub">Dix questions tirées au hasard dans ce que tu as déjà vu, différentes à chaque lancement</div></div></div>
-  <div class="card group" style="margin-bottom:20px">${scopes.filter((x) => x.id !== 'all' && recallPool(x.id).length).map((x) => `
+  <div class="card group" style="margin-bottom:20px">${scopes.filter((x) => recallPool(x.id).length).map((x) => `
     <div class="group-row" style="cursor:default"><span class="gr-main"><span class="gr-title">${esc(x.label)}</span><span class="gr-sub">${recallDoneToday(x.id) ? 'Rappel du jour fait, leçons débloquées' : 'Rappel demandé à ta première leçon du jour'}</span></span>
     <span class="pill ${recallDoneToday(x.id) ? 'ok' : 'wait'}">${recallDoneToday(x.id) ? 'Fait' : 'À faire'}</span></div>`).join('') || '<div class="group-row" style="cursor:default"><span class="gr-sub">Termine une leçon pour débloquer les rappels</span></div>'}</div>
-  <div class="segmented" style="margin-bottom:20px">${scopes.map((x) => `<button class="${x.id === recallScope ? 'on' : ''}" data-action="recall-scope" data-scope="${esc(x.id)}">${esc(x.label)}</button>`).join('')}</div>
+  ${scopes.length > 1 ? `<div class="segmented" style="margin-bottom:20px">${scopes.map((x) => `<button class="${x.id === recallScope ? 'on' : ''}" data-action="recall-scope" data-scope="${esc(x.id)}">${esc(x.label)}</button>`).join('')}</div>` : ''}
   <div class="card recall-hero">
     <div class="recall-ico">${icon('brain')}</div>
     <div style="flex:1;min-width:0">
@@ -836,7 +836,7 @@ function settings() {
         <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
       </button>
     </div>
-    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.8.1</div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.8.2</div>
   </div>`;
 }
 
