@@ -3,6 +3,7 @@ import * as S from './store.js';
 import { initWindow } from './window.js';
 import { audioSlot, audioSay, hydrateAudio, stopAudio } from './audio.js';
 import * as PL from './plan.js';
+import * as G from './gen.js';
 
 const { state } = S;
 const $ = (s, r = document) => r.querySelector(s);
@@ -19,6 +20,7 @@ let catalog = [];
 let quizSession = null;
 let subnavClosed = false;
 let recallSet = null;
+let practiceSet = null;
 let recallScope = 'all';
 let recallNext = null;
 
@@ -560,6 +562,7 @@ function lesson() {
     ${l.audio?.length ? `<div class="audio-list">${l.audio.map(audioSlot).join('')}</div>` : ''}
     <div class="prose">${l.content || '<p class="dim">Contenu à venir.</p>'}</div>
     ${l.exercise ? exerciseCard(d, l) : ''}
+    ${G.generatorFor(d, l) ? practiceCard() : ''}
     <div class="reader-foot">
       ${prev ? `<button class="btn btn-ghost" data-go='${JSON.stringify({ name: 'lesson', id: d.id, ...prev })}'>${icon('left')}Précédente</button>` : '<span></span>'}
       <div class="flex">
@@ -582,9 +585,21 @@ function exerciseCard(d, l) {
   </div>`;
 }
 
+function practiceCard() {
+  return `<div class="card exercise-card">
+    <div class="flex" style="gap:14px;min-width:0">
+      <span class="mod-num">${icon('refresh')}</span>
+      <div style="min-width:0"><div class="mod-title">Entraînement à volonté</div>
+      <div class="mod-sub">10 nouvelles questions à chaque fois, sans effet sur ta progression</div></div>
+    </div>
+    <button class="btn" data-action="start-practice">S'entraîner${icon('right')}</button>
+  </div>`;
+}
+
 const RECALL_D = { id: 'recall', name: 'Rappel', color: 'var(--accent)', modules: [] };
 
 function quizCtx() {
+  if (route.gen) return practiceSet && practiceSet.id === route.gen ? { d: practiceSet.d, l: practiceSet.l, q: practiceSet.q, key: 'practice:' + practiceSet.id, title: `Entraînement : ${practiceSet.l.title}`, kind: 'practice' } : null;
   if (route.mi === 'recall') return recallSet ? { d: RECALL_D, q: recallSet.q, key: 'recall:' + recallSet.id, title: 'Rappel', kind: 'recall' } : null;
   const d = S.getDomain(route.id);
   if (d && route.mi === 'work') {
@@ -611,19 +626,20 @@ function answerOk(x, a) {
 
 function quiz() {
   const c = quizCtx();
+  if (!c && route.gen) return (go({ name: 'lesson', id: route.id, mi: route.mi, li: route.li }), null);
   if (!c) return (go(route.mi === 'recall' ? { name: 'recall' } : S.getDomain(route.id) ? { name: 'domain', id: route.id } : HOME), null);
   const { d, q, key, title, kind } = c;
   if (!S.isUnlocked(d)) return (go({ name: 'domain', id: d.id }), null);
-  const back = kind === 'exercise' ? { name: 'lesson', id: d.id, mi: route.mi, li: route.li } : kind === 'recall' ? { name: 'recall' } : kind === 'works' || kind === 'work' ? { name: 'domain', id: d.id, tab: 'oeuvres' } : { name: 'domain', id: d.id };
+  const back = kind === 'exercise' || kind === 'practice' ? { name: 'lesson', id: d.id, mi: route.mi, li: route.li } : kind === 'recall' ? { name: 'recall' } : kind === 'works' || kind === 'work' ? { name: 'domain', id: d.id, tab: 'oeuvres' } : { name: 'domain', id: d.id };
   if (kind === 'recall') crumbs([{ label: 'Rappel', go: { name: 'recall' } }, { label: 'Questions' }]);
-  else crumbs([{ label: 'Accueil', go: HOME }, { label: d.name, go: { name: 'domain', id: d.id } }, ...(kind === 'exercise' ? [{ label: c.l.title, go: back }] : []), { label: kind === 'exercise' ? 'Exercice' : title }]);
+  else crumbs([{ label: 'Accueil', go: HOME }, { label: d.name, go: { name: 'domain', id: d.id } }, ...(kind === 'exercise' || kind === 'practice' ? [{ label: c.l.title, go: back }] : []), { label: kind === 'exercise' ? 'Exercice' : kind === 'practice' ? 'Entraînement' : title }]);
   if (!quizSession || quizSession.key !== key) {
     const shuffle = (n) => { const a = [...Array(n).keys()]; for (let i = n - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
     quizSession = { key, answers: Array(q.questions.length).fill(null), orders: q.questions.map((x) => (x.choices ? shuffle(x.choices.length) : null)), submitted: false, pct: 0 };
   }
   const qs = quizSession;
   const pass = S.passScore(q);
-  const okMsg = { exam: 'Domaine validé. Gloire au travailleur studieux, Camarade', quiz: 'Module validé, le suivant est débloqué', exercise: 'Leçon validée, elle est cochée automatiquement', recall: 'Bonne mémoire, Camarade', works: 'Tu connais tes classiques, Camarade', work: 'Œuvre maîtrisée, Camarade' }[kind];
+  const okMsg = { exam: 'Domaine validé. Gloire au travailleur studieux, Camarade', quiz: 'Module validé, le suivant est débloqué', exercise: 'Leçon validée, elle est cochée automatiquement', recall: 'Bonne mémoire, Camarade', practice: 'Bien joué, Camarade. Encore une série ?', works: 'Tu connais tes classiques, Camarade', work: 'Œuvre maîtrisée, Camarade' }[kind];
 
   const result = qs.submitted ? `
     <div class="card result">
@@ -632,14 +648,19 @@ function quiz() {
       <div class="muted">${qs.correct}/${q.questions.length} bonnes réponses · seuil ${pass} %</div>
       <div class="muted" style="margin-top:6px">${qs.pct >= pass ? okMsg : 'Relis les corrections ci-dessous puis retente ta chance'}</div>
       <div class="flex" style="justify-content:center;margin-top:18px">
-        <button class="btn" data-action="retry-quiz">${icon('refresh')}Recommencer</button>
-        <button class="btn btn-primary" data-go='${JSON.stringify(kind === 'recall' && recallNext ? recallNext : back)}'>${kind === 'recall' && recallNext ? 'Continuer ma séance' : { exercise: 'Retour à la leçon', recall: 'Retour au rappel', works: 'Retour aux œuvres', work: 'Retour aux œuvres' }[kind] || 'Retour au domaine'}</button>
+        <button class="btn" data-action="retry-quiz">${icon('refresh')}${kind === 'recall' ? 'Nouveau rappel' : kind === 'practice' ? 'Nouvelle série' : 'Recommencer'}</button>
+        <button class="btn btn-primary" data-go='${JSON.stringify(kind === 'recall' && recallNext ? recallNext : back)}'>${kind === 'recall' && recallNext ? 'Continuer ma séance' : { exercise: 'Retour à la leçon', practice: 'Retour à la leçon', recall: 'Retour au rappel', works: 'Retour aux œuvres', work: 'Retour aux œuvres' }[kind] || 'Retour au domaine'}</button>
       </div>
     </div>${kind === 'recall' ? recallReview(q, qs) : ''}` : '';
+  const hint = (t) => {
+    const m = String(t).match(/consigne\s*[:\-–]?\s*(.+)/i);
+    const v = (m ? m[1] : String(t).replace(/^\s*(\d+\)|[a-z]\))\s*/i, '')).trim();
+    return esc(v.charAt(0).toUpperCase() + v.slice(1));
+  };
 
   let lastSection = null;
   const items = q.questions.map((x, i) => {
-    const sec = x.section && x.section !== lastSection ? `<div class="q-section">${esc(x.section)}</div>` : '';
+    const sec = kind !== 'recall' && x.section && x.section !== lastSection ? `<div class="q-section">${esc(x.section)}</div>` : '';
     if (x.section) lastSection = x.section;
     const say = x.audio ? audioSay(x.audio) : '';
     const prompt = esc(x.q).replace(/_{3,}/g, '<span class="blank"></span>');
@@ -661,6 +682,7 @@ function quiz() {
     }
     return `${sec}<div class="card q">
       ${x.src ? `<div class="q-src">${esc(x.src.domain)} · ${esc(x.src.title)}</div>` : ''}
+      ${kind === 'recall' && x.section ? `<div class="q-hint">${hint(x.section)}</div>` : ''}
       <div class="q-title"><span class="n">${String(i + 1).padStart(2, '0')}</span><span class="q-text">${prompt}</span>${say}</div>
       ${body}
       ${qs.submitted && x.explain ? `<div class="explain">${icon('info', 'dim')} ${esc(x.explain)}</div>` : ''}
@@ -676,7 +698,7 @@ function quiz() {
   <div class="reader">
     <div class="eyebrow"><span style="color:${d.color}">●</span> ${esc(d.name)}</div>
     <h1 class="h1" style="font-size:28px">${esc(title)}</h1>
-    <div class="sub" style="margin-bottom:22px">${q.questions.length} questions · réussite à ${pass} %${kind !== 'recall' && S.bestScore(key) !== null ? ` · meilleur score ${S.bestScore(key)} %` : ''}</div>
+    <div class="sub" style="margin-bottom:22px">${q.questions.length} questions · réussite à ${pass} %${kind !== 'recall' && kind !== 'practice' && S.bestScore(key) !== null ? ` · meilleur score ${S.bestScore(key)} %` : ''}</div>
     ${result}${intro}${items}
     ${qs.submitted ? '' : `<div class="quiz-bar"><span class="muted mono" style="font-size:12px" id="answeredCount">${answered}/${q.questions.length} répondues</span>
       <button class="btn btn-primary" data-action="submit-quiz" ${answered === q.questions.length ? '' : 'disabled'}>Valider mes réponses</button></div>`}
@@ -699,9 +721,10 @@ function recallPool(scope) {
         });
       });
       if (m.quiz && S.isPassed(S.quizKey(d, m), m.quiz)) {
+        let sec;
         m.quiz.questions.forEach((x) => {
-          const { section, ...rest } = x;
-          out.push({ ...rest, src: { domain: domainLabel(d), title: m.quiz.title || m.title, go: { name: 'domain', id: d.id } } });
+          if (x.section) sec = x.section;
+          out.push({ ...x, section: x.section || sec, src: { domain: domainLabel(d), title: m.quiz.title || m.title, go: { name: 'domain', id: d.id } } });
         });
       }
     });
@@ -733,7 +756,7 @@ function recall() {
   const hist = (state.progress.recalls || []).slice(-6).reverse();
   return `
   <div class="page-head"><div><h1 class="h1">Rappel</h1>
-    <div class="sub">Dix questions tirées au hasard dans ce que tu as déjà vu, différentes à chaque lancement</div></div></div>
+    <div class="sub">Dix questions tirées au hasard dans ce que tu as déjà vu, différentes à chaque lancement. Rappels illimités : relance autant que tu veux</div></div></div>
   <div class="card group" style="margin-bottom:20px">${scopes.filter((x) => recallPool(x.id).length).map((x) => `
     <div class="group-row" style="cursor:default"><span class="gr-main"><span class="gr-title">${esc(x.label)}</span><span class="gr-sub">${recallDoneToday(x.id) ? 'Rappel du jour fait, leçons débloquées' : 'Rappel demandé à ta première leçon du jour'}</span></span>
     <span class="pill ${recallDoneToday(x.id) ? 'ok' : 'wait'}">${recallDoneToday(x.id) ? 'Fait' : 'À faire'}</span></div>`).join('') || '<div class="group-row" style="cursor:default"><span class="gr-sub">Termine une leçon pour débloquer les rappels</span></div>'}</div>
@@ -836,7 +859,7 @@ function settings() {
         <span class="gr-main"><span class="gr-title">Tout réinitialiser</span><span class="gr-sub">Efface la progression et les domaines, puis réinstalle le cours d'anglais</span></span>
       </button>
     </div>
-    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.8.2</div>
+    <div class="dim mono" style="font-size:11.5px;padding:16px 4px">Neurone v0.9.0</div>
   </div>`;
 }
 
@@ -1127,7 +1150,9 @@ const actions = {
     if (!c) return;
     const qs = quizSession;
     qs.correct = c.q.questions.filter((x, i) => answerOk(x, qs.answers[i])).length;
-    if (c.kind === 'recall') {
+    if (c.kind === 'practice') {
+      qs.pct = Math.round((qs.correct / c.q.questions.length) * 100);
+    } else if (c.kind === 'recall') {
       qs.pct = Math.round((qs.correct / c.q.questions.length) * 100);
       (state.progress.recalls ||= []).push({ date: Date.now(), pct: qs.pct, n: c.q.questions.length, scope: recallSet?.scope || 'all' });
       S.save();
@@ -1139,7 +1164,15 @@ const actions = {
     render();
     $('#view').scrollTo({ top: 0, behavior: 'smooth' });
   },
-  'retry-quiz': () => { if (route.mi === 'recall') return actions['start-recall'](); quizSession = null; render(); $('#view').scrollTop = 0; },
+  'retry-quiz': () => { if (route.gen) return actions['start-practice'](); if (route.mi === 'recall') return actions['start-recall'](); quizSession = null; render(); $('#view').scrollTop = 0; },
+  'start-practice': () => {
+    const d = S.getDomain(route.id), l = d?.modules[route.mi]?.lessons[route.li], t = G.generatorFor(d, l);
+    if (!t) return;
+    practiceSet = { id: Date.now(), d, l, q: { passScore: 80, questions: G.generate(t) } };
+    quizSession = null;
+    go({ name: 'quiz', id: d.id, mi: route.mi, li: route.li, gen: practiceSet.id });
+    $('#view').scrollTop = 0;
+  },
   'start-recall': () => {
     if (!buildRecall(recallScope)) return toast('Termine au moins une leçon pour lancer un rappel', false);
     go({ name: 'quiz', mi: 'recall' });
